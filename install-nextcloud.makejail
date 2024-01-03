@@ -1,4 +1,8 @@
 INCLUDE options/options.makejail
 INCLUDE options/volumes.makejail
 
-PKG nextcloud-php82
+PKG nextcloud-php82 \
+    php82-pdo_pgsql \
+    php82-pdo_sqlite \
+    php82-pecl-memcached \
+    php82-pecl-redis
