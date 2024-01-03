@@ -1,0 +1,4 @@
+INCLUDE options/options.makejail
+INCLUDE options/volumes.makejail
+
+PKG nextcloud-php82

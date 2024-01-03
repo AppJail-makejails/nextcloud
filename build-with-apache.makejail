@@ -1,0 +1,5 @@
+INCLUDE gh+AppJail-makejails/apache
+INCLUDE install-nextcloud.makejail
+
+CMD rm -rf /usr/local/www/apache24/data
+CMD ln -s /usr/local/www/nextcloud /usr/local/www/apache24/data
