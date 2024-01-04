@@ -3,3 +3,4 @@ OPTION volume=nextcloud-apps-pkg mountpoint:/usr/local/www/nextcloud/apps-pkg ow
 OPTION volume=nextcloud-config mountpoint:/usr/local/www/nextcloud/config owner:80 group:80
 OPTION volume=nextcloud-data mountpoint:/usr/local/www/nextcloud/data owner:80 group:80 perm:770
 OPTION volume=nextcloud-themes mountpoint:/usr/local/www/nextcloud/themes owner:0 group:0
+OPTION volume=nextcloud-done mountpoint:/.nextcloud-done
