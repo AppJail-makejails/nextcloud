@@ -4,3 +4,4 @@ OPTION volume=nextcloud-config mountpoint:/usr/local/www/nextcloud/config owner:
 OPTION volume=nextcloud-data mountpoint:/usr/local/www/nextcloud/data owner:80 group:80 perm:770
 OPTION volume=nextcloud-themes mountpoint:/usr/local/www/nextcloud/themes owner:0 group:0
 OPTION volume=nextcloud-done mountpoint:/.nextcloud-done
+OPTION volume=nextcloud-log mountpoint:/var/log/nextcloud owner:80 group:80
