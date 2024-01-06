@@ -5,4 +5,5 @@ PKG nextcloud-php82 \
     php82-pdo_pgsql \
     php82-pdo_sqlite \
     php82-pecl-memcached \
-    php82-pecl-redis
+    php82-pecl-redis \
+    php82-pecl-imagick
