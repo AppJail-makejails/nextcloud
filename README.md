@@ -758,6 +758,20 @@ See [#sqlite](#sqlite).
 
 See [MySQL / MariaDB](#mysql--mariadb).
 
+**.env**:
+
+```
+DIRECTOR_PROJECT=nextcloud
+ADMIN_USER=nextcloud
+ADMIN_PASS=nextcloud
+TRUSTED_DOMAINS=nextcloud.dtxdf-test.lan
+DB_NAME=nextcloud
+DB_USER=nextcloud
+DB_PASS=nextcloud
+DB_ROOT_PASS=nextcloud-rt
+SERVER_NAME=nextcloud.dtxdf-test.lan
+```
+
 **WARNING #1**: The above NGINX configuration file is taken from the [Nextcloud documentation](https://docs.nextcloud.com/server/latest/admin_manual/installation/nginx.html) with minor changes. This configuration file is intended for demonstration purposes, please change anything that does not fit your needs.
 
 **WARNING #2**: Mailpit is used as an SMTP server, but note that it is designed for development and testing.
