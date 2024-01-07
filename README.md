@@ -293,7 +293,7 @@ binlog_format = ROW
 
 **TODO**: OpenStack Swift is not tested, if you can, please open an issue with the steps you follow to use it with this Makejail.
 
-#### PHP-FPM + NGINX (+TLS) + Redis + Mailpit
+#### PHP-FPM + NGINX (+TLS) + MariaDB + Redis + Mailpit
 
 **appjail-director.yml**:
 
