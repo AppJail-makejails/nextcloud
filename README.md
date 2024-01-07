@@ -754,6 +754,10 @@ See [#sqlite](#sqlite).
 .crt    .key
 ```
 
+**files/usr/local/etc/mysql/conf.d/nextcloud.cnf**
+
+See [MySQL / MariaDB](#mysql--mariadb).
+
 **WARNING #1**: The above NGINX configuration file is taken from the [Nextcloud documentation](https://docs.nextcloud.com/server/latest/admin_manual/installation/nginx.html) with minor changes. This configuration file is intended for demonstration purposes, please change anything that does not fit your needs.
 
 **WARNING #2**: Mailpit is used as an SMTP server, but note that it is designed for development and testing.
