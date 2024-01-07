@@ -1,0 +1,60 @@
+OPTIONDIR=/.nextcloud-done/options
+
+option()
+{
+	printf "%s" "$2" > "${OPTIONDIR}/$1"
+}
+
+warn()
+{
+	echo "##!> $* <!##"
+}
+
+err()
+{
+	echo "###> $* <###"
+}
+
+info()
+{
+	echo "======> $* <======"
+}
+
+run_path()
+{
+	local hook_folder_path="/appjail-hooks.d/$1"
+	local return_code=0
+
+	if ! [ -d "${hook_folder_path}" ]; then
+		info "Skipping the folder \"${hook_folder_path}\", because it doesn't exist"
+		return 0
+	fi
+
+	info "Searching for scripts (*.sh) to run, located in the folder: ${hook_folder_path}"
+
+	find "${hook_folder_path}" -type f -maxdepth 1 -iname '*.sh' -print | sort | while read -r script_file_path; do
+		if ! [ -x "${script_file_path}" ]; then
+			info "The script \"${script_file_path}\" was skipped, because it didn't have the executable flag"
+			continue
+		fi
+
+		info "Running the script: \"${script_file_path}\""
+		run_as "${script_file_path}" || return_code="$?"
+
+		if [ "${return_code}" -ne "0" ]; then
+			err "Failed at executing \"${script_file_path}\". Exit code: ${return_code}"
+			exit 1
+		fi
+
+		info "Finished the script: \"${script_file_path}\""
+	done
+}
+
+run_as()
+{
+	su -m www -c "$1"
+}
+
+version_greater() {
+    [ "$(printf '%s\n' "$@" | sort -t '.' -n -k1,1 -k2,2 -k3,3 -k4,4 | head -n 1)" != "$1" ]
+}

@@ -1,0 +1,67 @@
+INCLUDE options/options.makejail
+
+ARG nextcloud_memory_limit=513M
+ARG nextcloud_upload_limit=513M
+# .ini
+ARG nextcloud_php_type=production
+# Tag
+ARG nextcloud_tag=13.2-php82-apache
+
+FROM --entrypoint gh+AppJail-makejails/nextcloud nextcloud:${nextcloud_tag}
+
+RAW case "${nextcloud_php_type}" in
+RAW 	development|production) ;;
+RAW 	*) echo "VALID TYPES: development, production"; exit 1
+RAW esac
+
+CMD echo "======> Using '${nextcloud_php_type}' PHP configuration file ... <======"
+CMD ln -s /usr/local/etc/php.ini-${nextcloud_php_type} /usr/local/etc/php.ini
+
+CMD echo "======> Installing required files ... <======"
+COPY --verbose usr
+
+RAW if appjail cmd jexec "${APPJAIL_JAILNAME}" [ -d "/usr/local/www/apache24/data" ]; then
+	COPY --verbose files/apache24 /usr/local/etc
+RAW fi
+
+VAR phpdir=/usr/local/etc/php
+
+CMD echo "======> Configuring increase-some-limits.ini ... <======"
+REPLACE ${phpdir}/increase-some-limits.ini MEMORY_LIMIT ${nextcloud_memory_limit}
+REPLACE ${phpdir}/increase-some-limits.ini UPLOAD_LIMIT ${nextcloud_upload_limit}
+
+CMD echo "======> Installing crontab file ... <======"
+COPY files/crontab /tmp
+CMD crontab -u www /tmp/crontab
+CMD rm -f /tmp/crontab
+
+CMD echo "======> Fixing owner & group ... <======"
+CMD chown -R www:www /usr/local/www/nextcloud/config
+CMD chown www:www /usr/local/www/nextcloud/.htaccess
+
+CMD echo "======> Fixing permissions ... <======"
+CMD chmod 644 /usr/local/www/nextcloud/config/config.php
+
+CMD echo "======> Installing scripts ... <======"
+COPY --verbose scripts
+WORKDIR /scripts
+RUN /scripts/configure-nextcloud.sh
+
+CMD echo "======> Uninstalling scripts ... <======"
+CMD rm -rf /scripts
+
+RAW if appjail cmd jexec "${APPJAIL_JAILNAME}" [ -d "/usr/local/www/apache24/data" ]; then
+	CMD echo "======> Restarting apache24 ... <======"
+	SERVICE apache24 restart
+RAW else
+	CMD echo "======> Enabling php-fpm ... <======"
+	CMD if [ -f "/usr/local/etc/php-fpm.d/www.conf" ]; then \
+	        sed -i '' -Ee '/^listen[[:space:]]*=/s#.*#listen = 0.0.0.0:9000#' \
+		    /usr/local/etc/php-fpm.d/www.conf; \
+	        sed -i '' -Ee '/^\;clear_env[[:space:]]*=/s#.*#clear_env = no#' \
+		    /usr/local/etc/php-fpm.d/www.conf; \
+	    fi
+	SYSRC php_fpm_enable=YES
+	CMD echo "======> Restarting php-fpm ... <======"
+	SERVICE php-fpm restart
+RAW fi
