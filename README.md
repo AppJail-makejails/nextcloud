@@ -548,7 +548,7 @@ http {
         # Rule borrowed from `.htaccess` to handle Microsoft DAV clients
         location = / {
             if ( $http_user_agent ~ ^DavClnt ) {
-            return 302 /remote.php/webdav/$is_args$args;
+                return 302 /remote.php/webdav/$is_args$args;
             }
         }
 
@@ -563,18 +563,18 @@ http {
         # `location ~ /(\.|autotest|...)` which would otherwise handle requests
         # for `/.well-known`.
         location ^~ /.well-known {
-        # The rules in this block are an adaptation of the rules
-        # in `.htaccess` that concern `/.well-known`.
+            # The rules in this block are an adaptation of the rules
+            # in `.htaccess` that concern `/.well-known`.
 
-        location = /.well-known/carddav { return 301 /remote.php/dav/; }
-        location = /.well-known/caldav  { return 301 /remote.php/dav/; }
+            location = /.well-known/carddav { return 301 /remote.php/dav/; }
+            location = /.well-known/caldav  { return 301 /remote.php/dav/; }
 
-        location /.well-known/acme-challenge    { try_files $uri $uri/ =404; }
-        location /.well-known/pki-validation    { try_files $uri $uri/ =404; }
+            location /.well-known/acme-challenge    { try_files $uri $uri/ =404; }
+            location /.well-known/pki-validation    { try_files $uri $uri/ =404; }
 
-        # Let Nextcloud's API for `/.well-known` URIs handle all other
-        # requests by passing them to the front-end controller.
-        return 301 /index.php$request_uri;
+            # Let Nextcloud's API for `/.well-known` URIs handle all other
+            # requests by passing them to the front-end controller.
+            return 301 /index.php$request_uri;
         }
 
         # Rules borrowed from `.htaccess` to hide certain paths from clients
