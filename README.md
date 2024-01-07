@@ -855,3 +855,7 @@ Note: Only the scripts located in a hook folder (not sub-folders), ending with .
 | `13.2-php82-fpm`    | `amd64` | `13.2-RELEASE` | `thin` |
 | `14.0-php82-apache` | `amd64` | `14.0-RELEASE` | `thin` |
 | `14.0-php82-fpm`    | `amd64` | `14.0-RELEASE` | `thin` |
+
+## Notes
+
+1. The ideas present in the Docker image of Nextcloud are taken into account for users who are familiar with it.
