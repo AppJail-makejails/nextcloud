@@ -375,6 +375,7 @@ services:
       - file: /certs
       - expose: 80
       - expose: 443
+      - priority: 1
     arguments:
       - server_name: !ENV '${SERVER_NAME}'
     volumes:
