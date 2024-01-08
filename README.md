@@ -363,6 +363,7 @@ services:
       - nc-done: nextcloud-done
       - nc-log: nextcloud-log
       - nc-themes: nextcloud-themes
+      - nc-wwwdir: /usr/local/www/nextcloud
 
   revproxy:
     name: nextcloud-nginx
@@ -398,8 +399,11 @@ volumes:
     device: .volumes/nextcloud/log
   nc-themes:
     device: .volumes/nextcloud/themes
+  nc-wwwdir:
+    device: !ENV '${PWD}/.volumes/nextcloud/wwwdir'
+    type: 'nullfs:reverse'
   revproxy-wwwdir:
-    device: /usr/local/appjail/jails/nextcloud/jail/usr/local/www/nextcloud
+    device: .volumes/nextcloud/wwwdir
     type: 'nullfs'
   revproxy-apps:
     device: .volumes/nextcloud/apps
