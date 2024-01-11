@@ -20,7 +20,19 @@ appjail makejail \
     -f gh+AppJail-makejails/nextcloud \
     -o virtualnet=":<random> default" \
     -o nat \
-    -o expose=80
+    -o expose=80 \
+    -o template="$PWD/template.conf"
+```
+
+**template.conf**:
+
+```
+exec.start: "/bin/sh /etc/rc"
+exec.stop: "/bin/sh /etc/rc.shutdown jail"
+sysvshm: new
+sysvsem: new
+sysvmsg: new
+mount.devfs
 ```
 
 Enter `http://<your ip address>` in the browser on another system or `http://<jail ip address or host name>` on the same system from which Nextcloud is deployed and follow the installation wizard.
