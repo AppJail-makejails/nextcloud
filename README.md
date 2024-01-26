@@ -793,6 +793,17 @@ SERVER_NAME=nextcloud.dtxdf-test.lan
 
 **WARNING #2**: Mailpit is used as an SMTP server, but note that it is designed for development and testing.
 
+### Upgrading
+
+This Makejail can upgrade Nextcloud when the volumes are mounted correctly.
+
+```sh
+appjail-director down -d &&
+    appjail-director up
+```
+
+If the version differs, Nextcloud will be upgraded.
+
 ### Auto configuration via hook folders
 
 There are 5 hooks:
