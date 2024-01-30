@@ -31,7 +31,7 @@ exec.start: "/bin/sh /etc/rc"
 exec.stop: "/bin/sh /etc/rc.shutdown jail"
 sysvshm: new
 sysvsem: new
-sysvmsg: new
+
 mount.devfs
 ```
 
@@ -820,7 +820,7 @@ Note: Only the scripts located in a hook folder (not sub-folders), ending with .
 
 ### Arguments
 
-* `nextcloud_tag` (default: `13.2-php82-apache`): [#tags](#tags).
+* `nextcloud_tag` (default: `13.2-php82-apache`): See [#tags](#tags).
 * `nextcloud_php_type` (default: `production`): The PHP configuration file to link to `/usr/local/etc/php.ini`. Valid values: `development`, `production`.
 * `nextcloud_memory_limit` (default: `513M`): This option will override the memory limit for PHP ([memory_limit](https://www.php.net/manual/en/ini.core.php#ini.memory-limit)).
 * `nextcloud_upload_limit` (default: `513M`): This option will change [upload_max_filesize](https://www.php.net/manual/en/ini.core.php#ini.upload-max-filesize) and [post_max_size](https://www.php.net/manual/en/ini.core.php#ini.post-max-size) values.
