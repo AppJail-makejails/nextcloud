@@ -31,7 +31,7 @@ exec.start: "/bin/sh /etc/rc"
 exec.stop: "/bin/sh /etc/rc.shutdown jail"
 sysvshm: new
 sysvsem: new
-
+sysvmsg: new
 mount.devfs
 ```
 
