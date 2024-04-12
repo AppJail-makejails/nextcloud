@@ -5,7 +5,7 @@ ARG nextcloud_upload_limit=513M
 # .ini
 ARG nextcloud_php_type=production
 # Tag
-ARG nextcloud_tag=13.2-php82-apache
+ARG nextcloud_tag=13.3-php82-apache
 
 FROM --entrypoint gh+AppJail-makejails/nextcloud nextcloud:${nextcloud_tag}
 

@@ -148,7 +148,7 @@ services:
     options:
       - template: !ENV '${PWD}/template.conf'
     arguments:
-      - postgres_tag: '13.2-15'
+      - postgres_tag: '13.3-15'
     volumes:
       - pg-done: pg-done
       - pg-data: pg-data
@@ -239,7 +239,7 @@ services:
     makejail: gh+AppJail-makejails/mariadb
     priority: 98
     arguments:
-      - mariadb_tag: '13.2-106'
+      - mariadb_tag: '13.3-106'
       - mariadb_user: !ENV '${DB_USER}'
       - mariadb_password: !ENV '${DB_PASS}'
       - mariadb_database: !ENV '${DB_NAME}'
@@ -321,7 +321,7 @@ services:
     makejail: gh+AppJail-makejails/mariadb
     priority: 97
     arguments:
-      - mariadb_tag: '13.2-106'
+      - mariadb_tag: '13.3-106'
       - mariadb_user: !ENV '${DB_USER}'
       - mariadb_password: !ENV '${DB_PASS}'
       - mariadb_database: !ENV '${DB_NAME}'
@@ -350,7 +350,7 @@ services:
     makejail: gh+AppJail-makejails/nextcloud
     priority: 100
     arguments:
-      - nextcloud_tag: '13.2-php82-fpm'
+      - nextcloud_tag: '13.3-php82-fpm'
     environment:
       - MYSQL_DATABASE: !ENV '${DB_NAME}'
       - MYSQL_USER: !ENV '${DB_USER}'
@@ -820,7 +820,7 @@ Note: Only the scripts located in a hook folder (not sub-folders), ending with .
 
 ### Arguments
 
-* `nextcloud_tag` (default: `13.2-php82-apache`): See [#tags](#tags).
+* `nextcloud_tag` (default: `13.3-php82-apache`): See [#tags](#tags).
 * `nextcloud_php_type` (default: `production`): The PHP configuration file to link to `/usr/local/etc/php.ini`. Valid values: `development`, `production`.
 * `nextcloud_memory_limit` (default: `513M`): This option will override the memory limit for PHP ([memory_limit](https://www.php.net/manual/en/ini.core.php#ini.memory-limit)).
 * `nextcloud_upload_limit` (default: `513M`): This option will change [upload_max_filesize](https://www.php.net/manual/en/ini.core.php#ini.upload-max-filesize) and [post_max_size](https://www.php.net/manual/en/ini.core.php#ini.post-max-size) values.
@@ -899,8 +899,8 @@ Note: Only the scripts located in a hook folder (not sub-folders), ending with .
 
 | Tag                 | Arch    | Version        | Type   |
 | ------------------- | ------- | -------------- | ------ |
-| `13.2-php82-apache` | `amd64` | `13.2-RELEASE` | `thin` |
-| `13.2-php82-fpm`    | `amd64` | `13.2-RELEASE` | `thin` |
+| `13.3-php82-apache` | `amd64` | `13.3-RELEASE` | `thin` |
+| `13.3-php82-fpm`    | `amd64` | `13.3-RELEASE` | `thin` |
 | `14.0-php82-apache` | `amd64` | `14.0-RELEASE` | `thin` |
 | `14.0-php82-fpm`    | `amd64` | `14.0-RELEASE` | `thin` |
 
