@@ -299,7 +299,149 @@ binlog_format = ROW
 
 #### MinIO
 
-**TODO**: MinIO was successfully tested, however the steps to use it with this Makejail will be posted here when there is a Makejail for it.
+**appjail-director.yml**:
+
+```yaml
+options:
+  - virtualnet: ':<random> default'
+  - nat:
+
+services:
+  nextcloud:
+    name: nextcloud
+    makejail: gh+AppJail-makejails/nextcloud
+    volumes:
+      - nc-apps: nextcloud-apps
+      - nc-config: nextcloud-config
+      - nc-data: nextcloud-data
+      - nc-done: nextcloud-done
+      - nc-log: nextcloud-log
+      - nc-themes: nextcloud-themes
+    options:
+      - template: !ENV '${PWD}/template.conf'
+    environment:
+      - MYSQL_DATABASE: !ENV '${DB_NAME}'
+      - MYSQL_USER: !ENV '${DB_USER}'
+      - MYSQL_PASSWORD: !ENV '${DB_PASS}'
+      - MYSQL_HOST: nextcloud-mariadb
+      - OBJECTSTORE_S3_BUCKET: !ENV '${MINIO_BUCKET}'
+      - OBJECTSTORE_S3_HOST: !ENV '${MINIO_HOST}'
+      - OBJECTSTORE_S3_PORT: !ENV '${MINIO_PORT}'
+      - OBJECTSTORE_S3_KEY: !ENV '${MINIO_KEY}'
+      - OBJECTSTORE_S3_SECRET: !ENV '${MINIO_SECRET}'
+      - OBJECTSTORE_S3_USEPATH_STYLE: 'true'
+      - OBJECTSTORE_S3_AUTOCREATE: 'true'
+  db:
+    name: nextcloud-mariadb
+    makejail: gh+AppJail-makejails/mariadb
+    volumes:
+      - mariadb-done: mariadb-done
+      - mariadb-db: mariadb-db
+    arguments:
+      - mariadb_user: !ENV '${DB_USER}'
+      - mariadb_password: !ENV '${DB_PASS}'
+      - mariadb_database: !ENV '${DB_NAME}'
+      - mariadb_root_password: !ENV '${DB_ROOT_PASS}'
+    priority: 98
+
+default_volume_type: '<volumefs>'
+
+volumes:
+  nc-apps:
+    device: .volumes/nextcloud/apps
+  nc-config:
+    device: .volumes/nextcloud/config
+  nc-data:
+    device: .volumes/nextcloud/data
+  nc-done:
+    device: .volumes/nextcloud/done
+  nc-log:
+    device: .volumes/nextcloud/log
+  nc-themes:
+    device: .volumes/nextcloud/themes
+  mariadb-done:
+    device: .volumes/mariadb/done
+  mariadb-db:
+    device: .volumes/mariadb/db
+```
+
+**minio.appjail-director.yml**:
+
+```yaml
+options:
+  - virtualnet: ':<random> default'
+  - nat:
+
+services:
+  minio:
+    name: nextcloud-minio
+    makejail: gh+AppJail-makejails/minio
+    volumes:
+      - minio-data: minio-data
+    start-environment:
+      - MINIO_ROOT_USER: !ENV '${MINIO_ROOT_USER}'
+      - MINIO_ROOT_PASSWORD: !ENV '${MINIO_ROOT_PASSWORD}'
+
+default_volume_type: '<volumefs>'
+
+volumes:
+  minio-data:
+    device: .volumes/minio/data
+```
+
+**template.conf**:
+
+See [#sqlite](#sqlite).
+
+**.env**:
+
+```
+DIRECTOR_PROJECT=nextcloud
+MINIO_BUCKET=nextcloud
+MINIO_HOST=nextcloud-minio
+MINIO_PORT=9000
+MINIO_ROOT_USER=minioadmin
+MINIO_ROOT_PASSWORD=minioadmin
+MINIO_KEY=%%MINIO_KEY%%
+MINIO_SECRET=%%MINIO_SECRET%%
+DB_USER=nextcloud
+DB_PASS=nextcloud
+DB_NAME=nextcloud
+DB_ROOT_PASS=nextcloud-rt
+```
+
+1. Install MinIO.
+
+```sh
+appjail-director up -f minio.appjail-director.yml -p nextcloud-minio
+```
+
+2. Log into MinIO admin panel and create an access key.
+
+<p align="center">
+<img src="https://i.ibb.co/WcqsZDj/minio.png">
+</p>
+
+<p align="center">
+<img src="https://i.ibb.co/crw5zMM/minio-access-key.png">
+</p>
+
+<p align="center">
+<img src="https://i.ibb.co/GvVJ8XQ/minio-key.png">
+</p>
+
+3. Configure `MINIO_KEY` and `MINIO_SECRET` environment variables.
+
+```sh
+sed -i '' -e 's|%%MINIO_KEY%%|<Your access key>|' .env
+sed -i '' -e 's|%%MINIO_SECRET%%|<Your secret key>|' .env
+```
+
+4. Install Nextcloud.
+
+```sh
+appjail-director up
+```
 
 #### OpenStack Swift
 
