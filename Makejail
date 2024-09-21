@@ -63,5 +63,5 @@ RAW else
 	    fi
 	SYSRC php_fpm_enable=YES
 	CMD echo "======> Restarting php-fpm ... <======"
-	SERVICE php-fpm restart
+	SERVICE php_fpm restart
 RAW fi
