@@ -1043,8 +1043,8 @@ Note: Only the scripts located in a hook folder (not sub-folders), ending with .
 | ------------------- | ------- | -------------- | ------ |
 | `13.4-php82-apache` | `amd64` | `13.4-RELEASE` | `thin` |
 | `13.4-php82-fpm`    | `amd64` | `13.4-RELEASE` | `thin` |
-| `14.1-php82-apache` | `amd64` | `14.1-RELEASE` | `thin` |
-| `14.1-php82-fpm`    | `amd64` | `14.1-RELEASE` | `thin` |
+| `14.2-php82-apache` | `amd64` | `14.2-RELEASE` | `thin` |
+| `14.2-php82-fpm`    | `amd64` | `14.2-RELEASE` | `thin` |
 
 ## Notes
 
