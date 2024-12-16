@@ -1,0 +1,9 @@
+INCLUDE options/options.makejail
+INCLUDE options/volumes.makejail
+
+PKG nextcloud-php%%PHP_TAG%% \
+    php%%PHP_TAG%%-pdo_pgsql \
+    php%%PHP_TAG%%-pdo_sqlite \
+    php%%PHP_TAG%%-pecl-memcached \
+    php%%PHP_TAG%%-pecl-redis \
+    php%%PHP_TAG%%-pecl-imagick
