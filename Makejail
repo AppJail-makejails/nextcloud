@@ -6,7 +6,7 @@ ARG nextcloud_ajspec=gh+AppJail-makejails/nextcloud
 # .ini
 ARG nextcloud_php_type=production
 # Tag
-ARG nextcloud_tag=13.5-php82-apache
+ARG nextcloud_tag=13.5-php84-apache
 
 FROM --entrypoint "${nextcloud_ajspec}" nextcloud:${nextcloud_tag}
 

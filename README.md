@@ -492,7 +492,7 @@ services:
     makejail: gh+AppJail-makejails/nextcloud
     priority: 100
     arguments:
-      - nextcloud_tag: '13.5-php82-fpm'
+      - nextcloud_tag: '13.5-php84-fpm'
     environment:
       - MYSQL_DATABASE: !ENV '${DB_NAME}'
       - MYSQL_USER: !ENV '${DB_USER}'
@@ -962,7 +962,7 @@ Note: Only the scripts located in a hook folder (not sub-folders), ending with .
 
 ### Arguments
 
-* `nextcloud_tag` (default: `13.5-php82-apache`): See [#tags](#tags).
+* `nextcloud_tag` (default: `13.5-php84-apache`): See [#tags](#tags).
 * `nextcloud_ajspec` (default: `gh+AppJail-makejails/nextcloud`): Entry point where the `appjail-ajspec(5)` file is located.
 * `nextcloud_php_type` (default: `production`): The PHP configuration file to link to `/usr/local/etc/php.ini`. Valid values: `development`, `production`.
 * `nextcloud_memory_limit` (default: `513M`): This option will override the memory limit for PHP ([memory_limit](https://www.php.net/manual/en/ini.core.php#ini.memory-limit)).
@@ -1042,10 +1042,10 @@ Note: Only the scripts located in a hook folder (not sub-folders), ending with .
 
 | Tag                 | Arch    | Version        | Type   |
 | ------------------- | ------- | -------------- | ------ |
-| `13.5-php82-apache` | `amd64` | `13.5-RELEASE` | `thin` |
-| `13.5-php82-fpm`    | `amd64` | `13.5-RELEASE` | `thin` |
-| `14.3-php82-apache` | `amd64` | `14.3-RELEASE` | `thin` |
-| `14.3-php82-fpm`    | `amd64` | `14.3-RELEASE` | `thin` |
+| `13.5-php84-apache` | `amd64` | `13.5-RELEASE` | `thin` |
+| `13.5-php84-fpm`    | `amd64` | `13.5-RELEASE` | `thin` |
+| `14.3-php84-apache` | `amd64` | `14.3-RELEASE` | `thin` |
+| `14.3-php84-fpm`    | `amd64` | `14.3-RELEASE` | `thin` |
 
 ## Notes
 
