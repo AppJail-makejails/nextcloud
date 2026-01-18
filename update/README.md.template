@@ -1044,8 +1044,8 @@ Note: Only the scripts located in a hook folder (not sub-folders), ending with .
 | ------------------- | ------- | -------------- | ------ |
 | `%%TAG1%%-php%%PHP_TAG%%-apache` | `amd64` | `%%TAG1%%-RELEASE` | `thin` |
 | `%%TAG1%%-php%%PHP_TAG%%-fpm`    | `amd64` | `%%TAG1%%-RELEASE` | `thin` |
-| `%%TAG2%%-php%%PHP_TAG%%-apache` | `amd64` | `%%TAG2%%-RELEASE` | `thin` |
-| `%%TAG2%%-php%%PHP_TAG%%-fpm`    | `amd64` | `%%TAG2%%-RELEASE` | `thin` |
+| `%%TAG2%%-php%%PHP_TAG%%-apache` | `amd64` | `%%TAG2%%` | `thin` |
+| `%%TAG2%%-php%%PHP_TAG%%-fpm`    | `amd64` | `%%TAG2%%` | `thin` |
 
 ## Notes
 
