@@ -26,4 +26,3 @@ tags+: 15-php84-fpm
 15-php84-fpm.sum.amd64: 50374634054f4c27a0ed30521737eed8bafa8af581df83b7b50fbe3fce44de1f
 15-php84-fpm.size.amd64: 948052411
 15-php84-fpm.source.amd64: "http://appjail.hpc.at/nextcloud-fpm/15-php84-fpm-amd64-image.appjail"
-maintenance: "This image is uploading, please wait a moment and try again. If you are importing this image using a Makejail that has the '--<name>_ajspec' argument, you can use the 'reproduce' method to use 'appjail-reproduce'. See 'appjail-image(5)' for details."
