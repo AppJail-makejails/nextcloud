@@ -4,24 +4,27 @@ Nextcloud is a suite of client-server software for creating and using file hosti
 
 wikipedia.org/wiki/Nextcloud
 
-<img src="https://upload.wikimedia.org/wikipedia/commons/thumb/6/60/Nextcloud_Logo.svg/800px-Nextcloud_Logo.svg.png" width="60%" height="auto">
+<img src="https://upload.wikimedia.org/wikipedia/commons/thumb/6/60/Nextcloud_Logo.svg/960px-Nextcloud_Logo.svg.png" width="30%" height="auto" alt="Nextcloud logo">
 
 ## How to use this Makejail
 
-### Recommendation
+This image is designed to be used in a micro-service environment. There are two versions of the image you can choose from.
 
-For any of the following deployment methods visit `Administration settings > Administration > Overview` and follow the recommendations that suits your environment.
+The `apache` variant contains a full Nextcloud installation including an apache web server. It is designed to be easy to use and gets you running pretty fast. This is also the default for the `latest` tag.
 
-### Basic usage
+The second option is a `fpm` variant. It is based on the [php-fpm](https://github.com/AppJail-makejails/php) image and runs a fastCGI-Process that serves your Nextcloud page. To use this image it must be combined with any webserver that can proxy the http requests to the FastCGI-port of the container.
 
-```sh
-appjail makejail \
-    -j nextcloud \
-    -f gh+AppJail-makejails/nextcloud \
+### Using the apache image
+
+The apache image contains a webserver and exposes port 80. To start the container type:
+
+```console
+$ appjail oci run -Pd \
+    -o overwrite=force \
     -o virtualnet=":<random> default" \
     -o nat \
-    -o expose=80 \
-    -o template="$PWD/template.conf"
+    -o template=template.conf \
+    ghcr.io/appjail-makejails/nextcloud nextcloud
 ```
 
 **template.conf**:
@@ -35,13 +38,274 @@ sysvmsg: new
 mount.devfs
 ```
 
-Enter `http://<your ip address>` in the browser on another system or `http://<jail ip address or host name>` on the same system from which Nextcloud is deployed and follow the installation wizard.
+Now you can access Nextcloud at http://nextcloud:8080/ from your host system or http://host-ip:8080/ from external hosts.
 
-### Deploy using appjail-director
+### Using the fpm image
 
-Using Director to deploy Nextcloud is easier: run `appjail-director up` and Nextcloud is deployed anywhere.
+To use the fpm image, you need an additional web server, such as [nginx](https://docs.nextcloud.com/server/latest/admin_manual/installation/nginx.html), that can proxy http-request to the fpm-port of the container. For fpm connection this container uses port 9000. In most cases, you might want to use another container or your host as proxy.
 
-#### SQLite
+```console
+$ appjail oci run -Pd \
+    -o overwrite=force \
+    -o virtualnet=":<random> default" \
+    -o nat \
+    -o template=template.conf \
+    ghcr.io/appjail-makejails/nextcloud:15.1-fpm nextcloud
+```
+
+As the fastCGI-Process is not capable of serving static files (style sheets, images, ...), the webserver needs access to these files. See below for an example.
+
+### Using an external database
+
+By default, this container uses SQLite for data storage but the Nextcloud setup wizard (appears on first run) allows connecting to an existing MySQL/MariaDB or PostgreSQL database. Later on, we'll deploy both Nextcloud and MariaDB, as well as Nextcloud and PostgreSQL.
+
+### Persistent data
+
+The Nextcloud installation and all data beyond what lives in the database (file uploads, etc.) are stored in the volume `/usr/local/www/html`. That means your data is saved even if the container crashes, is stopped or deleted.
+
+`/usr/local/www/html` folder where all Nextcloud data lives.
+
+```console
+$ mkdir -p /var/appjail-volumes/nextcloud/data
+$ appjail oci run -Pd \
+    -o overwrite=force \
+    -o virtualnet=":<random> default" \
+    -o nat \
+    -o fstab="/var/appjail-volumes/nextcloud/data /usr/local/www/html" \
+    -o template=template.conf \
+    ghcr.io/appjail-makejails/nextcloud nextcloud
+```
+
+#### Additional volumes
+
+If you want to get fine grained access to your individual files, you can mount additional volumes for data, config, your theme and custom apps. The data, config files are stored in respective subfolders inside `/usr/local/www/html/`. The apps are split into core apps (which are shipped with Nextcloud and you don't need to take care of) and a custom_apps folder. If you use a custom theme it would go into the themes subfolder.
+
+Overview of the folders that can be mounted as volumes:
+
+* `/usr/local/www/html` Main folder, needed for updating
+* `/usr/local/www/html/custom_apps` installed / modified apps
+* `/usr/local/www/html/config` local configuration
+* `/usr/local/www/html/data` the actual data of your Nextcloud
+* `/usr/local/www/html/themes/<YOUR_CUSTOM_THEME>` theming/branding
+
+If you want to use volumes for all of these, it would look like this:
+
+```console
+$ mkdir -p /var/appjail-volumes/nextcloud/{apps,config,data,theme}
+$ appjail oci run -Pd \
+    -o overwrite=force \
+    -o virtualnet=":<random> default" \
+    -o nat \
+    -o fstab="/var/appjail-volumes/nextcloud/apps /usr/local/www/html/custom_apps" \
+    -o fstab="/var/appjail-volumes/nextcloud/config /usr/local/www/html/config" \
+    -o fstab="/var/appjail-volumes/nextcloud/data /usr/local/www/html/data" \
+    -o fstab="/var/appjail-volumes/nextcloud/theme /usr/local/www/html/themes/mytheme" \
+    -o template=template.conf \
+    ghcr.io/appjail-makejails/nextcloud nextcloud
+```
+
+#### Custom volumes
+
+If mounting additional volumes under `/usr/local/www/html`, you should consider:
+
+* Confirming that [upgrade.exclude](upgrade.exclude) contains the files and folders that should persist during installation and upgrades; or
+* Mounting storage volumes to locations outside of `/usr/local/www/html`.
+
+> You should note that data inside the main folder (/usr/local/www/html) will be overridden/removed during installation and upgrades, unless listed in [upgrade.exclude](upgrade.exclude). The additional volumes officially supported are already in that list, but custom volumes will need to be added by you. We suggest mounting custom storage volumes outside of /usr/local/www/html and if possible read-only so that making this adjustment is unnecessary. If you must do so, however, you may build a custom image with a modified `/upgrade.exclude` file that incorporates your custom volume(s).
+
+### Using the Nextcloud command-line interface
+
+To use the [Nextcloud command-line interface](https://docs.nextcloud.com/server/latest/admin_manual/configuration_server/occ_command.html) (aka. `occ command`):
+
+```console
+$ appjail oci exec -u www nextcloud php occ
+```
+
+### Auto configuration via environment variables
+
+The Nextcloud image supports auto configuration via environment variables. You can preconfigure everything that is asked on the install page on first run. To enable auto configuration, set your database connection via the following environment variables. You must specify all of the environment variables for a given database or the database environment variables defaults to SQLITE. ONLY use one database type!
+
+**SQLite**:
+
+* `SQLITE_DATABASE`: Name of the database using sqlite.
+
+**MYSQL/MariaDB**:
+
+* `MYSQL_DATABASE`: Name of the database using mysql / mariadb.
+* `MYSQL_USER`: Username for the database using mysql / mariadb.
+* `MYSQL_PASSWORD`: Password for the database user using mysql / mariadb.
+* `MYSQL_HOST`: Hostname of the database server using mysql / mariadb.
+
+**PostgreSQL**:
+
+* `POSTGRES_DB`: Name of the database using postgres.
+* `POSTGRES_USER`: Username for the database using postgres.
+* `POSTGRES_PASSWORD`: Password for the database user using postgres.
+* `POSTGRES_HOST`: Hostname of the database server using postgres.
+
+As an alternative to passing sensitive information via environment variables, `_FILE` may be appended to the previously listed environment variables, causing the initialization script to load the values for those variables from files present in the container. See [Secrets](#secrets) section below.
+
+If you set any group of values (i.e. all of `MYSQL_DATABASE`, `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_HOST`), they will not be asked in the install page on first run. With a complete configuration by using all variables for your database type, you can additionally configure your Nextcloud instance by setting admin user and password (only works if you set both):
+
+* `NEXTCLOUD_ADMIN_USER`: Name of the Nextcloud admin user.
+* `NEXTCLOUD_ADMIN_PASSWORD`: Password for the Nextcloud admin user.
+
+If you want, you can set the data directory, otherwise default value will be used.
+
+* `NEXTCLOUD_DATA_DIR` (default: `/usr/local/www/html/data`): Configures the data directory where nextcloud stores all files from the users.
+
+One or more trusted domains can be set through environment variable, too. They will be added to the configuration after install.
+
+* `NEXTCLOUD_TRUSTED_DOMAINS` (not set by default): Optional space-separated list of domains.
+
+The install and update script is only triggered when a default command is used (`httpd-foreground` or php-fpm). If you use a custom command you have to enable the install / update with
+
+* `NEXTCLOUD_UPDATE` (default: `0`)
+
+You might want to make sure the htaccess is up to date after each container update.
+
+* `NEXTCLOUD_INIT_HTACCESS` (not set by default): Set it to true to enable run `occ maintenance:update:htaccess` after container initialization.
+
+If you want to use Redis you have to create a separate [Redis](https://github.com/AppJail-makejails/redis) container in your setup / in your Director file. To inform Nextcloud about the Redis container, pass in the following parameters:
+
+* `REDIS_HOST` (not set by default): Name of Redis container.
+* `REDIS_HOST_PORT` (default: `6379`): Optional port for Redis, only use for external Redis servers that run on non-standard ports.
+* `REDIS_HOST_PASSWORD` (not set by default): Redis password.
+
+The use of Redis is recommended to prevent file locking problems. See the examples for further instructions.
+
+To use an external SMTP server, you have to provide the connection details. To configure Nextcloud to use SMTP add:
+
+* `SMTP_HOST` (not set by default): The hostname of the SMTP server.
+* `SMTP_SECURE` (empty by default): Set to `ssl` to use SSL, or `tls` to use STARTTLS.
+* `SMTP_PORT` (default: `465` for SSL and `25` for non-secure connections): Optional port for the SMTP connection. Use `587` for an alternative port for STARTTLS.
+* `SMTP_AUTHTYPE` (default: `LOGIN`): The method used for authentication. Use `PLAIN` if no authentication is required.
+* `SMTP_NAME` (empty by default): The username for the authentication.
+* `SMTP_PASSWORD` (empty by default): The password for the authentication.
+* `MAIL_FROM_ADDRESS` (not set by default): Set the local-part for the 'from' field in the emails sent by Nextcloud.
+* `MAIL_DOMAIN` (not set by default): Set a different domain for the emails than the domain where Nextcloud is installed.
+
+At least `SMTP_HOST`, `MAIL_FROM_ADDRESS` and `MAIL_DOMAIN` must be set for the configurations to be applied.
+
+Check the [Nextcloud documentation](https://docs.nextcloud.com/server/latest/admin_manual/configuration_server/email_configuration.html) for other values to configure SMTP.
+
+To use an external S3 compatible object store as primary storage, set the following variables:
+
+* `OBJECTSTORE_S3_BUCKET`: The name of the bucket that Nextcloud should store the data in
+* `OBJECTSTORE_S3_REGION`: The region that the S3 bucket resides in
+* `OBJECTSTORE_S3_HOST`: The hostname of the object storage server
+* `OBJECTSTORE_S3_PORT`: The port that the object storage server is being served over
+* `OBJECTSTORE_S3_KEY`: AWS style access key
+* `OBJECTSTORE_S3_SECRET`: AWS style secret access key
+* `OBJECTSTORE_S3_STORAGE_CLASS`: The storage class to use when adding objects to the bucket
+* `OBJECTSTORE_S3_SSL` (default: `true`): Whether or not SSL/TLS should be used to communicate with object storage server
+* `OBJECTSTORE_S3_USEPATH_STYLE` (default: `false`): Not required for AWS S3
+* `OBJECTSTORE_S3_LEGACYAUTH` (default: `false`): Not required for AWS S3
+* `OBJECTSTORE_S3_OBJECT_PREFIX` (default: `urn:oid:`): Prefix to prepend to the fileid
+* `OBJECTSTORE_S3_AUTOCREATE` (default: `true`): Create the container if it does not exist
+* `OBJECTSTORE_S3_SSE_C_KEY` (not set by default): Base64 encoded key with a maximum length of 32 bytes for server side encryption (SSE-C)
+
+Check the [Nextcloud documentation](https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/primary_storage.html#simple-storage-service-s3) for more information.
+
+To use an external OpenStack Swift object store as primary storage, set the following variables:
+
+* `OBJECTSTORE_SWIFT_URL`: The Swift identity (Keystone) endpoint
+* `OBJECTSTORE_SWIFT_AUTOCREATE` (default: `false`): Whether or not Nextcloud should automatically create the Swift container
+* `OBJECTSTORE_SWIFT_USER_NAME`: Swift username
+* `OBJECTSTORE_SWIFT_USER_PASSWORD`: Swift user password
+* `OBJECTSTORE_SWIFT_USER_DOMAIN` (default: `Default`): Swift user domain
+* `OBJECTSTORE_SWIFT_PROJECT_NAME`: OpenStack project name
+* `OBJECTSTORE_SWIFT_PROJECT_DOMAIN` (default: `Default`): OpenStack project domain
+* `OBJECTSTORE_SWIFT_SERVICE_NAME` (default: `swift`): Swift service name
+* `OBJECTSTORE_SWIFT_REGION`: Swift endpoint region
+* `OBJECTSTORE_SWIFT_CONTAINER_NAME`: Swift container (bucket) that Nextcloud should store the data in
+
+Check the [Nextcloud documentation](https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/primary_storage.html#openstack-swift) for more information.
+
+To customize other PHP limits you can simply change the following variables:
+
+* `PHP_MEMORY_LIMIT` (default `512M`) This sets the maximum amount of memory in bytes that a script is allowed to allocate. This is meant to help prevent poorly written scripts from eating up all available memory but it can prevent normal operation if set too tight.
+* `PHP_UPLOAD_LIMIT` (default `512M`) This sets the upload limit (`post_max_size` and `upload_max_filesize`) for big files. Note that you may have to change other limits depending on your client, webserver or operating system. Check the [Nextcloud documentation](https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/big_file_upload_configuration.html) for more information.
+
+To customize Apache max file upload limit you can change the following variable:
+
+* `APACHE_BODY_LIMIT` (default `1073741824` [1GiB]) This restricts the total size of the HTTP request body sent from the client. It specifies the number of *bytes* that are allowed in a request body. A value of **0** means **unlimited**. Check the [Nextcloud documentation](https://docs.nextcloud.com/server/latest/admin_manual/configuration_files/big_file_upload_configuration.html#apache) for more information.
+
+### Auto configuration via hook folders
+
+There are 5 hooks
+
+* `pre-installation`: Executed before the Nextcloud is installed/initiated.
+* `post-installation`: Executed after the Nextcloud is installed/initiated.
+* `pre-upgrade`: Executed before the Nextcloud is upgraded.
+* `post-upgrade`: Executed after the Nextcloud is upgraded.
+* `before-starting`: Executed before the Nextcloud starts.
+
+To use the hooks triggered by the `entrypoint` script, either
+
+* Added your script(s) to the individual of the hook folder(s), which are located at the path `/entrypoint-hooks.d` in the container
+* Use volume(s) if you want to use script from the host system inside the container, see example.
+
+**Note:** Only the script(s) located in a hook folder (not sub-folders), ending with `.sh` and marked as executable, will be executed.
+
+**Example:** Mount using volumes
+
+```yaml
+...
+  app:
+    name: nextcloud
+    makejail: gh+AppJail-makejails/nextcloud
+...
+    volumes:
+      - pre-installation-hook: /entrypoint-hooks.d/pre-installation
+      - post-installation-hook: /entrypoint-hooks.d/post-installation
+      - pre-upgrade-hook: /entrypoint-hooks.d/pre-upgrade
+      - post-upgrade-hook: /entrypoint-hooks.d/post-upgrade
+      - before-starting-hook: /entrypoint-hooks.d/before-starting
+...
+volumes:
+  pre-installation-hook:
+    device: !ENV '${PWD}/app-hooks/pre-installation'
+  post-installation-hook:
+    device: !ENV '${PWD}/app-hooks/post-installation-hook'
+  pre-upgrade-hook:
+    device: !ENV '${PWD}/app-hooks/pre-upgrade'
+  post-upgrade-hook:
+    device: !ENV '${PWD}/app-hooks/post-upgrade'
+  before-starting-hook:
+    device: !ENV '${PWD}/app-hooks/before-starting'
+```
+
+### Using the apache image behind a reverse proxy and auto configure server host and protocol
+
+The apache image will replace the remote addr (IP address visible to Nextcloud) with the IP address from `X-Real-IP` if the request is coming from a proxy in `10.0.0.0/8`, `172.16.0.0/12` or `192.168.0.0/16` by default. If you want Nextcloud to pick up the server host (`HTTP_X_FORWARDED_HOST`), protocol (`HTTP_X_FORWARDED_PROTO`) and client IP (`HTTP_X_FORWARDED_FOR`) from a trusted proxy, then disable rewrite IP and add the reverse proxy's IP address to `TRUSTED_PROXIES`.
+
+* `APACHE_DISABLE_REWRITE_IP` (not set by default): Set to 1 to disable rewrite IP.
+* `TRUSTED_PROXIES` (empty by default): A space-separated list of trusted proxies. CIDR notation is supported for IPv4.
+
+If the `TRUSTED_PROXIES` approach does not work for you, try using fixed values for overwrite parameters.
+
+* `OVERWRITEHOST` (empty by default): Set the hostname of the proxy. Can also specify a port.
+* `OVERWRITEPROTOCOL` (empty by default): Set the protocol of the proxy, http or https.
+* `OVERWRITECLIURL` (empty by default): Set the cli url of the proxy (e.g. https://mydnsname.example.com)
+* `OVERWRITEWEBROOT` (empty by default): Set the absolute path of the proxy.
+* `OVERWRITECONDADDR` (empty by default): Regex to overwrite the values dependent on the remote address.
+
+Check the [Nexcloud documentation](https://docs.nextcloud.com/server/latest/admin_manual/configuration_server/reverse_proxy_configuration.html) for more details.
+
+Keep in mind that once set, removing these environment variables won't remove these values from the configuration file, due to how Nextcloud merges configuration files together.
+
+### Running this image with AppJail Director
+
+The easiest way to get a fully featured and functional setup is using a `appjail-director.yml` file. There are too many different possibilities to setup your system, so here are only some examples of what you have to look for.
+
+At first, make sure you have chosen the right base image (fpm or apache) and added features you wanted (see below). In every case, you would want to add a database container and volumes to get easy access to your persistent data. When you want to have your server reachable from the internet, adding HTTPS-encryption is mandatory! See below for more information.
+
+#### Base version - apache
+
+This version will use the apache image and add a mariaDB container. The volumes are set to keep your data persistent. This setup provides **no ssl encryption**.
+
+Make sure to pass in values for `MYSQL_ROOT_PASSWORD` and `MYSQL_PASSWORD` variables before you run this setup.
 
 **appjail-director.yml**:
 
@@ -51,158 +315,63 @@ options:
   - nat:
 
 services:
-  nextcloud:
+  db:
+    name: nextcloud-db
+    makejail: gh+AppJail-makejails/mariadb
+    priority: 98
+    options:
+      - container: 'args:--pull'
+    oci:
+      arguments: ["--transaction-isolation=READ-COMMITTED", "--log-bin=binlog", "--binlog-format=ROW"]
+      environment:
+        - MYSQL_ROOT_PASSWORD: !ENV '${MYSQL_ROOT_PASSWORD}'
+        - MYSQL_PASSWORD: !ENV '${MYSQL_PASSWORD}'
+        - MYSQL_DATABASE: nextcloud
+        - MYSQL_USER: nextcloud
+    volumes:
+      - db: /var/db/mysql
+
+  app:
     name: nextcloud
     makejail: gh+AppJail-makejails/nextcloud
-    environment:
-      - SQLITE_DATABASE: nextcloud
-      - NEXTCLOUD_ADMIN_USER: !ENV '${ADMIN_USER}'
-      - NEXTCLOUD_ADMIN_PASSWORD: !ENV '${ADMIN_PASS}'
-      - NEXTCLOUD_TRUSTED_DOMAINS: !ENV '${TRUSTED_DOMAINS}'
     options:
-      - expose: 80
+      - expose: 8080:80
+      - container: 'args:--pull'
+      - depend: nextcloud-db
       - template: !ENV '${PWD}/template.conf'
     volumes:
-      - apps: nextcloud-apps
-      - config: nextcloud-config
-      - data: nextcloud-data
-      - done: nextcloud-done
-      - log: nextcloud-log
-      - themes: nextcloud-themes
-
-default_volume_type: '<volumefs>'
+      - data: /usr/local/www/html
+    oci:
+      environment:
+        - MYSQL_PASSWORD: !ENV '${MYSQL_PASSWORD}'
+        - MYSQL_DATABASE: nextcloud
+        - MYSQL_USER: nextcloud
+        - MYSQL_HOST: nextcloud-db
 
 volumes:
-  apps:
-    device: .volumes/apps
-  config:
-    device: .volumes/config
+  db:
+    device: /var/appjail-volumes/nextcloud/db
   data:
-    device: .volumes/data
-  done:
-    device: .volumes/done
-  log:
-    device: .volumes/log
-  themes:
-    device: .volumes/themes
+    device: /var/appjail-volumes/nextcloud/data
 ```
 
 **.env**:
 
-```
+```dotenv
 DIRECTOR_PROJECT=nextcloud
-ADMIN_USER=nextcloud
-ADMIN_PASS=nextcloud
-TRUSTED_DOMAINS=nextcloud.dtxdf-test.lan
+MYSQL_ROOT_PASSWORD=changeme
+MYSQL_PASSWORD=please_changeme
 ```
 
-**template.conf**:
+Then run `appjail-director up`. Now you can access Nextcloud at http://nextcloud/ from your host system or http://host-ip:8080/ from external hosts.
 
-```
-exec.start: "/bin/sh /etc/rc"
-exec.stop: "/bin/sh /etc/rc.shutdown jail"
-sysvshm: new
-sysvsem: new
-sysvmsg: new
-mount.devfs
-```
+#### Base version - FPM
 
-#### PostgreSQL
+When using the FPM image, you need another container that acts as web server on port 80 and proxies the requests to the Nextcloud container. In this example a simple nginx container is combined with the Nextcloud-fpm image and a MariaDB database container. The data is stored in volumes. The nginx container also needs access to static files from your Nextcloud installation. The configuration for nginx is stored in the configuration file `nginx.conf`, that is mounted into the container.
 
-```yaml
-options:
-  - virtualnet: ':<random> default'
-  - nat:
+As this setup does **not include encryption**, it should be run behind a proxy.
 
-services:
-  nextcloud:
-    name: nextcloud
-    makejail: gh+AppJail-makejails/nextcloud
-    environment:
-      - POSTGRES_DB: !ENV '${DB_NAME}'
-      - POSTGRES_USER: !ENV '${DB_USER}'
-      - POSTGRES_PASSWORD: !ENV '${DB_PASS}'
-      - POSTGRES_HOST: nextcloud-postgres
-      - NEXTCLOUD_ADMIN_USER: !ENV '${ADMIN_USER}'
-      - NEXTCLOUD_ADMIN_PASSWORD: !ENV '${ADMIN_PASS}'
-      - NEXTCLOUD_TRUSTED_DOMAINS: !ENV '${TRUSTED_DOMAINS}'
-    options:
-      - expose: 80
-      - template: !ENV '${PWD}/template.conf'
-    volumes:
-      - nc-apps: nextcloud-apps
-      - nc-config: nextcloud-config
-      - nc-data: nextcloud-data
-      - nc-done: nextcloud-done
-      - nc-log: nextcloud-log
-      - nc-themes: nextcloud-themes
-
-  db:
-    name: nextcloud-postgres
-    makejail: gh+AppJail-makejails/postgres
-    priority: 98
-    environment:
-      - POSTGRES_DB: !ENV '${DB_NAME}'
-      - POSTGRES_USER: !ENV '${DB_USER}'
-      - POSTGRES_PASSWORD: !ENV '${DB_PASS}'
-    options:
-      - template: !ENV '${PWD}/template.conf'
-    arguments:
-      - postgres_tag: '14.3-15'
-    volumes:
-      - pg-done: pg-done
-      - pg-data: pg-data
-
-default_volume_type: '<volumefs>'
-
-volumes:
-  nc-apps:
-    device: .volumes/nextcloud/apps
-  nc-config:
-    device: .volumes/nextcloud/config
-  nc-data:
-    device: .volumes/nextcloud/data
-  nc-done:
-    device: .volumes/nextcloud/done
-  nc-log:
-    device: .volumes/nextcloud/log
-  nc-themes:
-    device: .volumes/nextcloud/themes
-  pg-done:
-    device: .volumes/postgres/done
-  pg-data:
-    device: .volumes/postgres/data
-```
-
-**.env**:
-
-```
-DIRECTOR_PROJECT=nextcloud
-ADMIN_USER=nextcloud
-ADMIN_PASS=nextcloud
-TRUSTED_DOMAINS=nextcloud.dtxdf-test.lan
-DB_NAME=nextcloud
-DB_USER=nextcloud
-DB_PASS=nextcloud
-```
-
-**template.conf**:
-
-See [#sqlite](#sqlite).
-
-**Notes**:
-
-1. If you see the following message in `Administration settings > Administration > Overview`:
-
-> The database is missing some indexes. Due to the fact that adding indexes on big tables could take some time they were not added automatically. By running "occ db:add-missing-indices" those missing indexes could be added manually while the instance keeps running. Once the indexes are added queries to those tables are usually much faster. Missing optional index "fs_storage_path_prefix" in table "filecache".
-
-Run the following command:
-
-```sh
-appjail cmd jexec nextcloud occ db:add-missing-indices
-```
-
-#### MySQL / MariaDB
+Make sure to pass in values for `MYSQL_ROOT_PASSWORD` and `MYSQL_PASSWORD` variables before you run this setup.
 
 **appjail-director.yml**:
 
@@ -212,441 +381,115 @@ options:
   - nat:
 
 services:
-  nextcloud:
-    name: nextcloud
-    makejail: gh+AppJail-makejails/nextcloud
-    environment:
-      - MYSQL_DATABASE: !ENV '${DB_NAME}'
-      - MYSQL_USER: !ENV '${DB_USER}'
-      - MYSQL_PASSWORD: !ENV '${DB_PASS}'
-      - MYSQL_HOST: nextcloud-mariadb
-      - NEXTCLOUD_ADMIN_USER: !ENV '${ADMIN_USER}'
-      - NEXTCLOUD_ADMIN_PASSWORD: !ENV '${ADMIN_PASS}'
-      - NEXTCLOUD_TRUSTED_DOMAINS: !ENV '${TRUSTED_DOMAINS}'
-    options:
-      - expose: 80
-      - template: !ENV '${PWD}/template.conf'
-    volumes:
-      - nc-apps: nextcloud-apps
-      - nc-config: nextcloud-config
-      - nc-data: nextcloud-data
-      - nc-done: nextcloud-done
-      - nc-log: nextcloud-log
-      - nc-themes: nextcloud-themes
-
   db:
-    name: nextcloud-mariadb
-    makejail: gh+AppJail-makejails/mariadb
-    priority: 98
-    arguments:
-      - mariadb_tag: '14.3-106'
-      - mariadb_user: !ENV '${DB_USER}'
-      - mariadb_password: !ENV '${DB_PASS}'
-      - mariadb_database: !ENV '${DB_NAME}'
-      - mariadb_root_password: !ENV '${DB_ROOT_PASS}'
-    options:
-      - copydir: !ENV '${PWD}/files'
-      - file: /usr/local/etc/mysql/conf.d/nextcloud.cnf
-    volumes:
-      - mariadb-done: mariadb-done
-      - mariadb-db: mariadb-db
-
-default_volume_type: '<volumefs>'
-
-volumes:
-  nc-apps:
-    device: .volumes/nextcloud/apps
-  nc-config:
-    device: .volumes/nextcloud/config
-  nc-data:
-    device: .volumes/nextcloud/data
-  nc-done:
-    device: .volumes/nextcloud/done
-  nc-log:
-    device: .volumes/nextcloud/log
-  nc-themes:
-    device: .volumes/nextcloud/themes
-  mariadb-done:
-    device: .volumes/mariadb/done
-  mariadb-db:
-    device: .volumes/mariadb/db
-```
-
-**.env**:
-
-```
-DIRECTOR_PROJECT=nextcloud
-ADMIN_USER=nextcloud
-ADMIN_PASS=nextcloud
-TRUSTED_DOMAINS=nextcloud.dtxdf-test.lan
-DB_NAME=nextcloud
-DB_USER=nextcloud
-DB_PASS=nextcloud
-DB_ROOT_PASS=nextcloud-rt
-```
-
-**template.conf**:
-
-See [#sqlite](#sqlite).
-
-**files/usr/local/etc/mysql/conf.d/nextcloud.cnf**
-
-```
-[mysqld]
-transaction_isolation = READ-COMMITTED
-binlog_format = ROW
-```
-
-#### MinIO
-
-**appjail-director.yml**:
-
-```yaml
-options:
-  - virtualnet: ':<random> default'
-  - nat:
-
-services:
-  nextcloud:
-    name: nextcloud
-    makejail: gh+AppJail-makejails/nextcloud
-    volumes:
-      - nc-apps: nextcloud-apps
-      - nc-config: nextcloud-config
-      - nc-data: nextcloud-data
-      - nc-done: nextcloud-done
-      - nc-log: nextcloud-log
-      - nc-themes: nextcloud-themes
-    options:
-      - template: !ENV '${PWD}/template.conf'
-    environment:
-      - MYSQL_DATABASE: !ENV '${DB_NAME}'
-      - MYSQL_USER: !ENV '${DB_USER}'
-      - MYSQL_PASSWORD: !ENV '${DB_PASS}'
-      - MYSQL_HOST: nextcloud-mariadb
-      - OBJECTSTORE_S3_BUCKET: !ENV '${MINIO_BUCKET}'
-      - OBJECTSTORE_S3_HOST: !ENV '${MINIO_HOST}'
-      - OBJECTSTORE_S3_PORT: !ENV '${MINIO_PORT}'
-      - OBJECTSTORE_S3_KEY: !ENV '${MINIO_KEY}'
-      - OBJECTSTORE_S3_SECRET: !ENV '${MINIO_SECRET}'
-      - OBJECTSTORE_S3_USEPATH_STYLE: 'true'
-      - OBJECTSTORE_S3_AUTOCREATE: 'true'
-  db:
-    name: nextcloud-mariadb
-    makejail: gh+AppJail-makejails/mariadb
-    volumes:
-      - mariadb-done: mariadb-done
-      - mariadb-db: mariadb-db
-    arguments:
-      - mariadb_user: !ENV '${DB_USER}'
-      - mariadb_password: !ENV '${DB_PASS}'
-      - mariadb_database: !ENV '${DB_NAME}'
-      - mariadb_root_password: !ENV '${DB_ROOT_PASS}'
-    priority: 98
-
-default_volume_type: '<volumefs>'
-
-volumes:
-  nc-apps:
-    device: .volumes/nextcloud/apps
-  nc-config:
-    device: .volumes/nextcloud/config
-  nc-data:
-    device: .volumes/nextcloud/data
-  nc-done:
-    device: .volumes/nextcloud/done
-  nc-log:
-    device: .volumes/nextcloud/log
-  nc-themes:
-    device: .volumes/nextcloud/themes
-  mariadb-done:
-    device: .volumes/mariadb/done
-  mariadb-db:
-    device: .volumes/mariadb/db
-```
-
-**minio.appjail-director.yml**:
-
-```yaml
-options:
-  - virtualnet: ':<random> default'
-  - nat:
-
-services:
-  minio:
-    name: nextcloud-minio
-    makejail: gh+AppJail-makejails/minio
-    volumes:
-      - minio-data: minio-data
-    start-environment:
-      - MINIO_ROOT_USER: !ENV '${MINIO_ROOT_USER}'
-      - MINIO_ROOT_PASSWORD: !ENV '${MINIO_ROOT_PASSWORD}'
-
-default_volume_type: '<volumefs>'
-
-volumes:
-  minio-data:
-    device: .volumes/minio/data
-```
-
-**template.conf**:
-
-See [#sqlite](#sqlite).
-
-**.env**:
-
-```
-DIRECTOR_PROJECT=nextcloud
-MINIO_BUCKET=nextcloud
-MINIO_HOST=nextcloud-minio
-MINIO_PORT=9000
-MINIO_ROOT_USER=minioadmin
-MINIO_ROOT_PASSWORD=minioadmin
-MINIO_KEY=%%MINIO_KEY%%
-MINIO_SECRET=%%MINIO_SECRET%%
-DB_USER=nextcloud
-DB_PASS=nextcloud
-DB_NAME=nextcloud
-DB_ROOT_PASS=nextcloud-rt
-```
-
-1. Install MinIO.
-
-```sh
-appjail-director up -f minio.appjail-director.yml -p nextcloud-minio
-```
-
-2. Log into MinIO admin panel and create an access key.
-
-<p align="center">
-<img src="https://i.ibb.co/WcqsZDj/minio.png">
-</p>
-
-<p align="center">
-<img src="https://i.ibb.co/crw5zMM/minio-access-key.png">
-</p>
-
-<p align="center">
-<img src="https://i.ibb.co/GvVJ8XQ/minio-key.png">
-</p>
-
-3. Configure `MINIO_KEY` and `MINIO_SECRET` environment variables.
-
-```sh
-sed -i '' -e 's|%%MINIO_KEY%%|<Your access key>|' .env
-sed -i '' -e 's|%%MINIO_SECRET%%|<Your secret key>|' .env
-```
-
-4. Install Nextcloud.
-
-```sh
-appjail-director up
-```
-
-#### OpenStack Swift
-
-**TODO**: OpenStack Swift is not tested, if you can, please open an issue with the steps you follow to use it with this Makejail.
-
-#### PHP-FPM + NGINX (+TLS) + MariaDB + Redis + Mailpit
-
-**appjail-director.yml**:
-
-```yaml
-options:
-  - virtualnet: ':<random> default'
-  - nat:
-  - copydir: !ENV '${PWD}/files'
-
-services:
-  db:
-    name: nextcloud-mariadb
+    name: nextcloud-db
     makejail: gh+AppJail-makejails/mariadb
     priority: 97
-    arguments:
-      - mariadb_tag: '14.3-106'
-      - mariadb_user: !ENV '${DB_USER}'
-      - mariadb_password: !ENV '${DB_PASS}'
-      - mariadb_database: !ENV '${DB_NAME}'
-      - mariadb_root_password: !ENV '${DB_ROOT_PASS}'
-    options:
-      - file: /usr/local/etc/mysql/conf.d/nextcloud.cnf
+    oci:
+      arguments: ["--transaction-isolation=READ-COMMITTED", "--log-bin=binlog", "--binlog-format=ROW"]
+      environment:
+        - MYSQL_ROOT_PASSWORD: !ENV '${MYSQL_ROOT_PASSWORD}'
+        - MYSQL_PASSWORD: !ENV '${MYSQL_PASSWORD}'
+        - MYSQL_DATABASE: nextcloud
+        - MYSQL_USER: nextcloud
     volumes:
-      - mariadb-done: mariadb-done
-      - mariadb-db: mariadb-db
+      - db: /var/db/mysql
 
-  redis:
-    name: nextcloud-redis
-    makejail: gh+AppJail-makejails/redis
-    priority: 98
-
-  mailpit:
-    name: nextcloud-mailpit
-    makejail: gh+AppJail-makejails/mailpit
-    priority: 99
-    start-environment:
-      - MP_SMTP_AUTH_ACCEPT_ANY: 1
-      - MP_SMTP_AUTH_ALLOW_INSECURE: 1
-
-  nextcloud:
-    name: nextcloud
+  app:
+    name: nextcloud-fpm
     makejail: gh+AppJail-makejails/nextcloud
-    priority: 100
+    priority: 98
     arguments:
-      - nextcloud_tag: '14.3-php84-fpm'
-    environment:
-      - MYSQL_DATABASE: !ENV '${DB_NAME}'
-      - MYSQL_USER: !ENV '${DB_USER}'
-      - MYSQL_PASSWORD: !ENV '${DB_PASS}'
-      - MYSQL_HOST: nextcloud-mariadb
-      - NEXTCLOUD_ADMIN_USER: !ENV '${ADMIN_USER}'
-      - NEXTCLOUD_ADMIN_PASSWORD: !ENV '${ADMIN_PASS}'
-      - NEXTCLOUD_TRUSTED_DOMAINS: !ENV '${TRUSTED_DOMAINS}'
-      - REDIS_HOST: nextcloud-redis
-      - SMTP_HOST: nextcloud-mailpit
-      - SMTP_PORT: 1025
-      - SMTP_NAME: user@example.org
-      - SMTP_PASSWORD: xxxxx
-      - MAIL_FROM_ADDRESS: support@example.org
-      - MAIL_DOMAIN: example.org
+      - nextcloud_tag: 15.1-fpm
     options:
+      - depend: nextcloud-db
       - template: !ENV '${PWD}/template.conf'
     volumes:
-      - nc-apps: nextcloud-apps
-      - nc-config: nextcloud-config
-      - nc-data: nextcloud-data
-      - nc-done: nextcloud-done
-      - nc-log: nextcloud-log
-      - nc-themes: nextcloud-themes
-      - nc-wwwdir: /usr/local/www/nextcloud
+      - data: /usr/local/www/html
+    oci:
+      environment:
+        - MYSQL_PASSWORD: !ENV '${MYSQL_PASSWORD}'
+        - MYSQL_DATABASE: nextcloud
+        - MYSQL_USER: nextcloud
+        - MYSQL_HOST: nextcloud-db
 
-  revproxy:
-    name: nextcloud-nginx
-    makejail: ./nginx.makejail
-    priority: 101
+  web:
+    name: nextcloud
+    makejail: gh+AppJail-makejails/nginx
     options:
-      - file: /usr/local/etc/nginx/nginx.conf
-      - file: /usr/local/etc/nginx/mime.types
-      - file: /certs
-      - expose: 80
-      - expose: 443
-      - priority: 1
-    arguments:
-      - server_name: !ENV '${SERVER_NAME}'
+      - expose: 8080:80
+      - depend: nextcloud-fpm
     volumes:
-      - revproxy-wwwdir: /usr/local/www/nextcloud
-      - revproxy-apps: /usr/local/www/nextcloud/apps
-      - revproxy-config: /usr/local/www/nextcloud/config
-      - revproxy-data: /usr/local/www/nextcloud/data
-      - revproxy-themes: /usr/local/www/nextcloud/themes
-
-default_volume_type: '<volumefs>'
+      - data: /usr/local/www/html
+      - nginx_conf: usr/local/etc/nginx/nginx.conf
 
 volumes:
-  nc-apps:
-    device: .volumes/nextcloud/apps
-  nc-config:
-    device: .volumes/nextcloud/config
-  nc-data:
-    device: .volumes/nextcloud/data
-  nc-done:
-    device: .volumes/nextcloud/done
-  nc-log:
-    device: .volumes/nextcloud/log
-  nc-themes:
-    device: .volumes/nextcloud/themes
-  nc-wwwdir:
-    device: !ENV '${PWD}/.volumes/nextcloud/wwwdir'
-    type: 'nullfs:reverse'
-  revproxy-wwwdir:
-    device: .volumes/nextcloud/wwwdir
-    type: 'nullfs'
-  revproxy-apps:
-    device: .volumes/nextcloud/apps
-    type: 'nullfs'
-  revproxy-config:
-    device: .volumes/nextcloud/config
-    type: 'nullfs'
-  revproxy-data:
-    device: .volumes/nextcloud/data
-    type: 'nullfs'
-  revproxy-themes:
-    device: .volumes/nextcloud/themes
-    type: 'nullfs'
-  mariadb-done:
-    device: .volumes/mariadb/done
-  mariadb-db:
-    device: .volumes/mariadb/db
+  db:
+    device: /var/appjail-volumes/nextcloud/db
+  data:
+    device: /var/appjail-volumes/nextcloud/data
+  nginx_conf:
+    device: !ENV '${PWD}/nginx.conf'
+    options: ro
 ```
 
-**nginx.makejail**:
+**.env**:
 
-```
-INCLUDE gh+AppJail-makejails/nginx
-
-ARG server_name
-ARG worker_processes=auto
-ARG worker_connections=1024
-ARG resolver=172.0.0.1
-ARG nextcloud_addr=nextcloud
-ARG nextcloud_port=9000
-
-VAR nginx_conf=/usr/local/etc/nginx/nginx.conf
-
-REPLACE ${nginx_conf} SERVER_NAME ${server_name}
-REPLACE ${nginx_conf} WORKER_PROCESSES ${worker_processes}
-REPLACE ${nginx_conf} WORKER_CONNECTIONS ${worker_connections}
-REPLACE ${nginx_conf} RESOLVER ${resolver}
-REPLACE ${nginx_conf} NEXTCLOUD_ADDR ${nextcloud_addr}
-REPLACE ${nginx_conf} NEXTCLOUD_PORT ${nextcloud_port}
-
-SERVICE nginx restart
+```dotenv
+DIRECTOR_PROJECT=nextcloud
+MYSQL_ROOT_PASSWORD=changeme
+MYSQL_PASSWORD=please_changeme
 ```
 
-**files/usr/local/etc/nginx/nginx.conf**:
+**nginx.conf**:
 
-```
-worker_processes  %{WORKER_PROCESSES};
+```nginx
+user  www;
+worker_processes  auto;
+
+error_log  /dev/stderr notice;
+pid        /var/run/nginx.pid;
+
 
 events {
-    worker_connections  %{WORKER_CONNECTIONS};
+    worker_connections  1024;
 }
 
+
 http {
-    resolver %{RESOLVER} valid=30s;
+    include       /usr/local/etc/nginx/mime.types;
+    default_type  application/octet-stream;
+    types {
+        text/javascript mjs;
+    }
+
+    log_format  main  '$remote_addr - $remote_user [$time_local] "$request" '
+                      '$status $body_bytes_sent "$http_referer" '
+                      '"$http_user_agent" "$http_x_forwarded_for"';
+
+    access_log  /dev/stdout  main;
+
+    sendfile        on;
+
+    keepalive_timeout  65;
+
+    # Prevent nginx HTTP Server Detection
+    server_tokens   off;
 
     # Set the `immutable` cache control options only for assets with a cache busting `v` argument
     map $arg_v $asset_immutable {
         "" "";
-        default "immutable";
+    default ", immutable";
+    }
+
+    resolver 172.16.0.1 valid=2s;
+    upstream php-handler {
+        zone backends 64k;
+        server nextcloud-fpm:9000 resolve;
     }
 
     server {
-        listen 80;
-        listen [::]:80;
-        server_name %{SERVER_NAME};
-
-        # Prevent nginx HTTP Server Detection
-        server_tokens off;
-
-        # Enforce HTTPS
-        return 301 https://$server_name$request_uri;
-    }
-
-    server {
-        listen 443      ssl http2;
-        listen [::]:443 ssl http2;
-        server_name %{SERVER_NAME};
-
-        # Path to the root of your installation
-        root /usr/local/www/nextcloud;
-
-        # Use Mozilla's guidelines for SSL/TLS settings
-        # https://mozilla.github.io/server-side-tls/ssl-config-generator/
-        ssl_certificate     /certs/.crt;
-        ssl_certificate_key /certs/.key;
-
-        # Prevent nginx HTTP Server Detection
-        server_tokens off;
+        listen        80;
 
         # HSTS settings
         # WARNING: Only add the preload option once you read about
@@ -654,12 +497,17 @@ http {
         # will add the domain to a hardcoded list that is shipped
         # in all major browsers and getting removed from this list
         # could take several months.
-        #add_header Strict-Transport-Security "max-age=15768000; includeSubDomains; preload" always;
+        #add_header Strict-Transport-Security "max-age=15768000; includeSubDomains; preload;" always;
 
         # set max upload size and increase upload timeout:
         client_max_body_size 512M;
         client_body_timeout 300s;
         fastcgi_buffers 64 4K;
+
+        # The settings allows you to optimize the HTTP2 bandwidth.
+        # See https://blog.cloudflare.com/delivering-http-2-upload-speed-improvements/
+        # for tuning hints
+        client_body_buffer_size 512k;
 
         # Enable gzip but do not remove ETag headers
         gzip on;
@@ -673,24 +521,18 @@ http {
         # with the `ngx_pagespeed` module, uncomment this line to disable it.
         #pagespeed off;
 
-        # The settings allows you to optimize the HTTP2 bandwidth.
-        # See https://blog.cloudflare.com/delivering-http-2-upload-speed-improvements/
-        # for tuning hints
-        client_body_buffer_size 512k;
-
         # HTTP response headers borrowed from Nextcloud `.htaccess`
-        add_header Referrer-Policy                   "no-referrer"       always;
-        add_header X-Content-Type-Options            "nosniff"           always;
-        add_header X-Frame-Options                   "SAMEORIGIN"        always;
-        add_header X-Permitted-Cross-Domain-Policies "none"              always;
-        add_header X-Robots-Tag                      "noindex, nofollow" always;
-        add_header X-XSS-Protection                  "1; mode=block"     always;
+        add_header Referrer-Policy                      "no-referrer"       always;
+        add_header X-Content-Type-Options               "nosniff"           always;
+        add_header X-Frame-Options                      "SAMEORIGIN"        always;
+        add_header X-Permitted-Cross-Domain-Policies    "none"              always;
+        add_header X-Robots-Tag                         "noindex, nofollow" always;
 
         # Remove X-Powered-By, which is an information leak
         fastcgi_hide_header X-Powered-By;
 
-        # See mime.types (mjs):
-        include mime.types;
+        # Path to the root of your installation
+        root /usr/local/www/html;
 
         # Specify how to handle directories -- specifying `/index.php$request_uri`
         # here as the fallback means that Nginx always exhibits the desired behaviour
@@ -698,8 +540,8 @@ http {
         # on the server. In particular, if that directory contains an index.php file,
         # that file is correctly served; if it doesn't, then the request is passed to
         # the front-end controller. This consistent behaviour means that we don't need
-        # to specify custom rules for certain paths (e.g. images and other asses,
-        # `/updater`, `/ocs-provider`), and thus
+        # to specify custom rules for certain paths (e.g. images and other assets,
+        # `/updater`, `/ocm-provider`, `/ocs-provider`), and thus
         # `try_files $uri $uri/ /index.php$request_uri`
         # always provides the desired behaviour.
         index index.php index.html /index.php$request_uri;
@@ -746,7 +588,7 @@ http {
         # to the URI, resulting in a HTTP 500 error response.
         location ~ \.php(?:$|/) {
             # Required for legacy support
-            rewrite ^/(?!index|remote|public|cron|core\/ajax\/update|status|ocs\/v[12]|updater\/.+|ocs-provider\/.+|.+\/richdocumentscode\/proxy) /index.php$request_uri;
+            rewrite ^/(?!index|remote|public|cron|core\/ajax\/update|status|ocs\/v[12]|updater\/.+|ocs-provider\/.+|.+\/richdocumentscode(_arm64)?\/proxy) /index.php$request_uri;
 
             fastcgi_split_path_info ^(.+?\.php)(/.*)$;
             set $path_info $fastcgi_path_info;
@@ -756,31 +598,31 @@ http {
             include fastcgi_params;
             fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
             fastcgi_param PATH_INFO $path_info;
-            fastcgi_param HTTPS on;
+            #fastcgi_param HTTPS on;
 
             fastcgi_param modHeadersAvailable true;         # Avoid sending the security headers twice
             fastcgi_param front_controller_active true;     # Enable pretty urls
-            set $endpoint %{NEXTCLOUD_ADDR};
-            fastcgi_pass $endpoint:%{NEXTCLOUD_PORT};
+            fastcgi_pass php-handler;
 
             fastcgi_intercept_errors on;
-            fastcgi_request_buffering off;
+            fastcgi_request_buffering on;                   # Required as PHP-FPM does not support chunked transfer encoding and requires a valid ContentLength header.
 
             fastcgi_max_temp_file_size 0;
         }
 
         # Serve static files
-        location ~ \.(?:css|js|mjs|svg|gif|png|jpg|ico|wasm|tflite|map|ogg|flac)$ {
+        location ~ \.(?:css|js|mjs|svg|gif|ico|jpg|png|webp|wasm|tflite|map|ogg|flac|mp4|webm)$ {
             try_files $uri /index.php$request_uri;
-            add_header Cache-Control "public, max-age=15778463, $asset_immutable";
+            add_header Cache-Control "public, max-age=15778463$asset_immutable";
+            add_header Referrer-Policy                   "no-referrer"       always;
+            add_header X-Content-Type-Options            "nosniff"           always;
+            add_header X-Frame-Options                   "SAMEORIGIN"        always;
+            add_header X-Permitted-Cross-Domain-Policies "none"              always;
+            add_header X-Robots-Tag                      "noindex, nofollow" always;
             access_log off;     # Optional: Don't log access to assets
-
-            location ~ \.wasm$ {
-                default_type application/wasm;
-            }
         }
 
-        location ~ \.woff2?$ {
+        location ~ \.(otf|woff2?)$ {
             try_files $uri /index.php$request_uri;
             expires 7d;         # Cache-Control policy borrowed from `.htaccess`
             access_log off;     # Optional: Don't log access to assets
@@ -798,254 +640,202 @@ http {
 }
 ```
 
-**files/usr/local/etc/nginx/mime.types**:
+Then run `appjail-director up`. Now you can access Nextcloud at http://nextcloud/ from your host system or http://host-ip:8080/ from external hosts.
 
-```
-types {
-    text/html                                        html htm shtml;
-    text/css                                         css;
-    text/xml                                         xml;
-    image/gif                                        gif;
-    image/jpeg                                       jpeg jpg;
-    # Add .mjs as a file extension for javascript:
-    application/javascript                           js mjs;
-    application/atom+xml                             atom;
-    application/rss+xml                              rss;
+### Secrets
 
-    text/mathml                                      mml;
-    text/plain                                       txt;
-    text/vnd.sun.j2me.app-descriptor                 jad;
-    text/vnd.wap.wml                                 wml;
-    text/x-component                                 htc;
+As an alternative to passing sensitive information via environment variables, `_FILE` may be appended to the previously listed environment variables, causing the initialization script to load the values for those variables from files present in the container. For example:
 
-    image/avif                                       avif;
-    image/png                                        png;
-    image/svg+xml                                    svg svgz;
-    image/tiff                                       tif tiff;
-    image/vnd.wap.wbmp                               wbmp;
-    image/webp                                       webp;
-    image/x-icon                                     ico;
-    image/x-jng                                      jng;
-    image/x-ms-bmp                                   bmp;
+**Secrets**:
 
-    font/woff                                        woff;
-    font/woff2                                       woff2;
-
-    application/java-archive                         jar war ear;
-    application/json                                 json;
-    application/mac-binhex40                         hqx;
-    application/msword                               doc;
-    application/pdf                                  pdf;
-    application/postscript                           ps eps ai;
-    application/rtf                                  rtf;
-    application/vnd.apple.mpegurl                    m3u8;
-    application/vnd.google-earth.kml+xml             kml;
-    application/vnd.google-earth.kmz                 kmz;
-    application/vnd.ms-excel                         xls;
-    application/vnd.ms-fontobject                    eot;
-    application/vnd.ms-powerpoint                    ppt;
-    application/vnd.oasis.opendocument.graphics      odg;
-    application/vnd.oasis.opendocument.presentation  odp;
-    application/vnd.oasis.opendocument.spreadsheet   ods;
-    application/vnd.oasis.opendocument.text          odt;
-    application/vnd.openxmlformats-officedocument.presentationml.presentation
-                                                     pptx;
-    application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
-                                                     xlsx;
-    application/vnd.openxmlformats-officedocument.wordprocessingml.document
-                                                     docx;
-    application/vnd.wap.wmlc                         wmlc;
-    application/wasm                                 wasm;
-    application/x-7z-compressed                      7z;
-    application/x-cocoa                              cco;
-    application/x-java-archive-diff                  jardiff;
-    application/x-java-jnlp-file                     jnlp;
-    application/x-makeself                           run;
-    application/x-perl                               pl pm;
-    application/x-pilot                              prc pdb;
-    application/x-rar-compressed                     rar;
-    application/x-redhat-package-manager             rpm;
-    application/x-sea                                sea;
-    application/x-shockwave-flash                    swf;
-    application/x-stuffit                            sit;
-    application/x-tcl                                tcl tk;
-    application/x-x509-ca-cert                       der pem crt;
-    application/x-xpinstall                          xpi;
-    application/xhtml+xml                            xhtml;
-    application/xspf+xml                             xspf;
-    application/zip                                  zip;
-
-    application/octet-stream                         bin exe dll;
-    application/octet-stream                         deb;
-    application/octet-stream                         dmg;
-    application/octet-stream                         iso img;
-    application/octet-stream                         msi msp msm;
-
-    audio/midi                                       mid midi kar;
-    audio/mpeg                                       mp3;
-    audio/ogg                                        ogg;
-    audio/x-m4a                                      m4a;
-    audio/x-realaudio                                ra;
-
-    video/3gpp                                       3gpp 3gp;
-    video/mp2t                                       ts;
-    video/mp4                                        mp4;
-    video/mpeg                                       mpeg mpg;
-    video/quicktime                                  mov;
-    video/webm                                       webm;
-    video/x-flv                                      flv;
-    video/x-m4v                                      m4v;
-    video/x-mng                                      mng;
-    video/x-ms-asf                                   asx asf;
-    video/x-ms-wmv                                   wmv;
-    video/x-msvideo                                  avi;
-}
+```console
+$ volumedir=/var/appjail-volumes/nextcloud
+$ mkdir -p "${volumedir}"
+$ secretsdir="${volumesdir}/secrets"
+$ install -d -m 0700 "${secretsdir}"
+$ echo -ne \
+    "postgres_db\n" \
+    "postgres_user\n" \
+    "postgres_password\n" \
+    "nextcloud_admin_password\n" \
+    "nextcloud_admin_user\n" |\
+  xargs -I % install -m 0600 /dev/null "${secretsdir}/%"
+$ $EDITOR "${secretsdir}/postgres_db"
+$ $EDITOR > "${secretsdir}/postgres_user"
+$ $EDITOR > "${secretsdir}/postgres_password"
+$ $EDITOR > "${secretsdir}/nextcloud_admin_password"
+$ $EDITOR > "${secretsdir}/nextcloud_admin_user"
 ```
 
-**template.conf**:
+**appjail-director.yml**:
 
-See [#sqlite](#sqlite).
+```yaml
+options:
+  - virtualnet: ':<random> default'
+  - nat:
 
-**Certificate & Key**:
+services:
+  db:
+    name: nextcloud-db
+    priority: 98
+    makejail: gh+AppJail-makejails/postgres
+    options:
+      - volume: secrets perm:0700
+      - template: !ENV '${PWD}/template.conf'
+    volumes:
+      - db: /var/db/postgres
+      - secrets: secrets
+    oci:
+      environment:
+        - POSTGRES_DB_FILE: /volumes/secrets/postgres_db
+        - POSTGRES_USER_FILE: /volumes/secrets/postgres_user
+        - POSTGRES_PASSWORD_FILE: /volumes/secrets/postgres_password
 
+  app:
+    name: nextcloud
+    makejail: gh+AppJail-makejails/nextcloud
+    options:
+      - expose: 8080:80
+      - volume: secrets perm:0700
+      - depend: nextcloud-db
+      - template: !ENV '${PWD}/template.conf'
+    volumes:
+      - data: /usr/local/www/html
+      - secrets: secrets
+    oci:
+      environment:
+        - POSTGRES_HOST: nextcloud-db
+        - POSTGRES_DB_FILE: /volumes/secrets/postgres_db
+        - POSTGRES_USER_FILE: /volumes/secrets/postgres_user
+        - POSTGRES_PASSWORD_FILE: /volumes/secrets/postgres_password
+        - NEXTCLOUD_ADMIN_PASSWORD_FILE: /volumes/secrets/nextcloud_admin_password
+        - NEXTCLOUD_ADMIN_USER_FILE: /volumes/secrets/nextcloud_admin_user
+        # required due to NEXTCLOUD_ADMIN_* env vars
+        - NEXTCLOUD_TRUSTED_DOMAINS: nextcloud
+
+volumes:
+  db:
+    device: /var/appjail-volumes/nextcloud/db
+  data:
+    device: /var/appjail-volumes/nextcloud/data
+  secrets:
+    device: /var/appjail-volumes/nextcloud/secrets
+    type: <volumefs>
+    options: ro
 ```
-# ls files/certs
-.crt    .key
+
+Currently, this is only supported for `NEXTCLOUD_ADMIN_PASSWORD`, `NEXTCLOUD_ADMIN_USER`, `MYSQL_DATABASE`, `MYSQL_PASSWORD`, `MYSQL_USER`, `POSTGRES_DB`, `POSTGRES_PASSWORD`, `POSTGRES_USER`, `REDIS_HOST_PASSWORD`, `SMTP_PASSWORD`, `OBJECTSTORE_S3_KEY`, and `OBJECTSTORE_S3_SECRET`.
+
+If you set any group of values (i.e. all of `MYSQL_DATABASE_FILE`, `MYSQL_USER_FILE`, `MYSQL_PASSWORD_FILE`, `MYSQL_HOST`), the script will not use the corresponding group of environment variables (`MYSQL_DATABASE`, `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_HOST`).
+
+### Make your Nextcloud available from the internet
+
+Until here, your Nextcloud is just available from your appjail host. If you want your Nextcloud available from the internet adding SSL encryption is mandatory.
+
+#### HTTPS - SSL encryption
+
+There are many different possibilities to introduce encryption depending on your setup.
+
+We recommend using a reverse proxy in front of your Nextcloud installation. Your Nextcloud will only be reachable through the proxy, which encrypts all traffic to the clients. You can mount your manually generated certificates to the proxy or use a fully automated solution which generates and renews the certificates for you.
+
+### First use
+
+When you first access your Nextcloud, the setup wizard will appear and ask you to choose an administrator account username, password and the database connection. For the database use `nextcloud-db` as host and `nextcloud` as table and user name. Also enter the password you chose in your `appjail-director.yml` file.
+
+### Update to a newer version
+
+Updating the Nextcloud container is done by pulling the new image, throwing away the old container and starting the new one.
+
+**It is only possible to upgrade one major version at a time. For example, if you want to upgrade from version 14 to 16, you will have to upgrade from version 14 to 15, then from 15 to 16.**
+
+Since all data is stored in volumes, nothing gets lost. The startup script will check for the version in your volume and the installed version. If it finds a mismatch, it automatically starts the upgrade process. Don't forget to add all the volumes to your new container, so it works as expected.
+
+```console
+$ appjail oci run -Pd \
+    -o overwrite=force \
+    -o virtualnet=":<random> default" \
+    -o nat \
+    -o template=template.conf \
+    -o fstab="/var/appjail-volumes/nextcloud/data /usr/local/www/html" \
+    ghcr.io/appjail-makejails/nextcloud nextcloud
 ```
 
-**files/usr/local/etc/mysql/conf.d/nextcloud.cnf**
+Beware that you have to run the same command with the options that you used to initially start your Nextcloud. That includes volumes, port mapping.
 
-See [MySQL / MariaDB](#mysql--mariadb).
+When using AppJail Director, your `appjail-director.yml` file takes care of your configuration, so you just have to run:
 
-**.env**:
-
-```
-DIRECTOR_PROJECT=nextcloud
-ADMIN_USER=nextcloud
-ADMIN_PASS=nextcloud
-TRUSTED_DOMAINS=nextcloud.dtxdf-test.lan
-DB_NAME=nextcloud
-DB_USER=nextcloud
-DB_PASS=nextcloud
-DB_ROOT_PASS=nextcloud-rt
-SERVER_NAME=nextcloud.dtxdf-test.lan
+```console
+$ appjail-director down -d && appjail-director up
 ```
 
-**WARNING #1**: The above NGINX configuration file is taken from the [Nextcloud documentation](https://docs.nextcloud.com/server/latest/admin_manual/installation/nginx.html) with minor changes. This configuration file is intended for demonstration purposes, please change anything that does not fit your needs.
+### Adding Features
 
-**WARNING #2**: Mailpit is used as an SMTP server, but note that it is designed for development and testing.
+A lot of people want to use additional functionality inside their Nextcloud installation. If the image does not include the packages you need, you can easily build your own image on top of it. Start your derived image with the `FROM` statement and add whatever you like.
 
-### Upgrading
+```dockerfile
+FROM ghcr.io/appjail-makejails/nextcloud:15.1-apache
 
-This Makejail can upgrade Nextcloud when the volumes are mounted correctly.
-
-```sh
-appjail-director down -d &&
-    appjail-director up
+RUN ...
 ```
 
-If the version differs, Nextcloud will be upgraded.
+If you intend to use another command to run the image, make sure that you set `NEXTCLOUD_UPDATE=1` in your Containerfile. Otherwise the installation and update will not work.
 
-### Auto configuration via hook folders
+```dockerfile
+FROM ghcr.io/appjail-makejails/nextcloud:15.1-apache
 
-There are 5 hooks:
+...
 
-* `pre-installation`: Executed before the Nextcloud is installed/initiated.
-* `post-installation`: Executed after the Nextcloud is installed/initiated.
-* `pre-upgrade`: Executed before the Nextcloud is upgraded.
-* `post-upgrade`: Executed after the Nextcloud is upgraded.
-* `before-starting`: Executed before the Nextcloud starts.
+ENV NEXTCLOUD_UPDATE=1
 
-To use the hooks triggered by this Makejail, add them to the `/appjail-hooks.d` folder inside the jail.
+CMD ["/usr/local/bin/supervisord"]
+```
 
-Note: Only the scripts located in a hook folder (not sub-folders), ending with .sh and marked as executable, will be executed.
+**Updating** your own derived image is also very simple. When a new version of the Nextcloud image is available run:
 
-### Arguments
+```console
+$ buildah build --network=host -t your-name --pull .
+```
 
-* `nextcloud_tag` (default: `14.3-php84-apache`): See [#tags](#tags).
-* `nextcloud_ajspec` (default: `gh+AppJail-makejails/nextcloud`): Entry point where the `appjail-ajspec(5)` file is located.
-* `nextcloud_php_type` (default: `production`): The PHP configuration file to link to `/usr/local/etc/php.ini`. Valid values: `development`, `production`.
-* `nextcloud_memory_limit` (default: `513M`): This option will override the memory limit for PHP ([memory_limit](https://www.php.net/manual/en/ini.core.php#ini.memory-limit)).
-* `nextcloud_upload_limit` (default: `513M`): This option will change [upload_max_filesize](https://www.php.net/manual/en/ini.core.php#ini.upload-max-filesize) and [post_max_size](https://www.php.net/manual/en/ini.core.php#ini.post-max-size) values.
+The `--pull` option tells buildah to look for new versions of the base image. Then the build instructions inside your `Containerfile` are run on top of the new image.
 
-### Environment
+### Arguments (stage: build)
 
-* `NEXTCLOUD_ADMIN_USER` (optional): Name of the Nextcloud admin user.
-* `NEXTCLOUD_ADMIN_PASSWORD` (optional): Password for the Nextcloud admin user.
-* `NEXTCLOUD_DATA_DIR` (default: `/usr/local/www/nextcloud/data`): Configures the data directory where nextcloud stores all files from the users.
-* `SQLITE_DATABASE` (optional): Name of the database using sqlite.
-* `MYSQL_DATABASE` (optional): Name of the database using MySQL / MariaDB.
-* `MYSQL_USER` (optional): Username for the database using MySQL / MariaDB.
-* `MYSQL_PASSWORD` (optional): Password for the database user using MySQL / MariaDB.
-* `MYSQL_HOST` (optional): Hostname of the database server using MySQL / MariaDB.
-* `POSTGRES_DB` (optional): Name of the database using PostgreSQL.
-* `POSTGRES_USER` (optional): Username for the database using PostgreSQL.
-* `POSTGRES_PASSWORD` (optional): Password for the database user using PostgreSQL.
-* `POSTGRES_HOST` (optional): Hostname of the database server using PostgreSQL.
-* `NEXTCLOUD_TRUSTED_DOMAINS` (optional): Optional space-separated list of domains.
-* `NEXTCLOUD_INIT_HTACCESS` (optional): Set it to true to enable run `occ maintenance:update:htaccess` after initialization.
-* `LOGTIMEZONE` (optional): The timezone for logfiles.
-* `REDIS_HOST` (optional): Host or IP address of Redis jail. It is also used as a PHP session handler.
-* `REDIS_HOST_PORT` (default: `6379`): Only use for external Redis servers that run on non-standard ports.
-* `REDIS_HOST_PASSWORD` (optional): Redis password. 
-* `OVERWRITEHOST` (optional): Set the hostname of the proxy. Can also specify a port.
-* `OVERWRITEPROTOCOL` (optional): Set the protocol of the proxy, i.e., http or https.
-* `OVERWRITECLIURL` (optional): Set the cli url of the proxy (e.g. https://mydnsname.example.com).
-* `OVERWRITEWEBROOT` (optional): Set the absolute path of the proxy.
-* `OVERWRITECONDADDR` (optional): Regex to overwrite the values dependent on the remote address.
-* `TRUSTED_PROXIES` (optional): Space-separated list of trusted proxies. CIDR notation is supported for IPv4.
-* `OBJECTSTORE_S3_BUCKET` (optional): The name of the bucket that Nextcloud should store the data in.
-* `OBJECTSTORE_S3_SSL` (default: `false`): 
-* `OBJECTSTORE_S3_USEPATH_STYLE` (default: `false`): Not required for AWS S3.
-* `OBJECTSTORE_S3_LEGACYPATH` (default: `false`): Not required for AWS S3.
-* `OBJECTSTORE_S3_AUTOCREATE` (default: `false`): Create the container if it does not exist.
-* `OBJECTSTORE_S3_REGION` (optional): The region that the S3 bucket resides in.
-* `OBJECTSTORE_S3_HOST` (optional): The hostname of the object storage server.
-* `OBJECTSTORE_S3_PORT` (optional): The port that the object storage server is being served over.
-* `OBJECTSTORE_S3_OBJECT_PREFIX` (default: `urn:oid:`): Prefix to prepend to the fileid.
-* `OBJECTSTORE_S3_KEY` (optional): AWS style access key.
-* `OBJECTSTORE_S3_SECRET` (optional): AWS style secret access key.
-* `SMTP_HOST` (optional): The hostname of the SMTP server.
-* `SMTP_PORT` (default `465` for SSL and `25` for non-secure connections): Optional port for the SMTP connection. Use `587` for an alternative port for STARTTLS.
-* `SMTP_SECURE` (optional): Set to `ssl` to use SSL, or `tls` to use STARTTLS.
-* `SMTP_NAME` (optional): The username for the authentication.
-* `SMTP_AUTHTYPE` (default: `LOGIN`): The method used for authentication. Use PLAIN if no authentication is required.
-* `SMTP_PASSWORD` (optional): The password for the authentication.
-* `MAIL_FROM_ADDRESS` (optional): Set the local-part for the 'from' field in the emails sent by Nextcloud.
-* `MAIL_DOMAIN` (optional): Set a different domain for the emails than the domain where Nextcloud is installed.
-* `OBJECTSTORE_SWIFT_URL` (optional): The Swift identity (Keystone) endpoint. 
-* `OBJECTSTORE_SWIFT_AUTOCREATE` (default: `false`): Whether or not Nextcloud should automatically create the Swift container.
-* `OBJECTSTORE_SWIFT_USER_NAME` (optional): Swift username.
-* `OBJECTSTORE_SWIFT_USER_PASSWORD` (optional): Swift user password.
-* `OBJECTSTORE_SWIFT_USER_DOMAIN` (optional): Swift user domain.
-* `OBJECTSTORE_SWIFT_PROJECT_NAME` (default: `Default`): OpenStack project name.
-* `OBJECTSTORE_SWIFT_PROJECT_DOMAIN` (default: `Default`): OpenStack project domain.
-* `OBJECTSTORE_SWIFT_SERVICE_NAME` (default: `swift`): 
-* `OBJECTSTORE_SWIFT_REGION` (optional): Swift endpoint region
-* `OBJECTSTORE_SWIFT_CONTAINER_NAME` (optional): Swift container (bucket) that Nextcloud should store the data in.
+* `nextcloud_from` (default: `ghcr.io/appjail-makejails/nextcloud`): Location of OCI image. See also [OCI Configuration](#oci-configuration).
+* `nextcloud_tag` (default: `latest`): OCI image tag. See also [OCI Configuration](#oci-configuration).
+
+### Environment (OCI image)
+
+* `UMASK` (default: `0022`): Override default umask setting.
 
 ### Volumes
 
-| Name               | Owner | Group | Perm | Type | Mountpoint                        |
-| ------------------ | ----- | ----- | ---- | ---- | --------------------------------- |
-| nextcloud-apps     | 80    | 80    |  -   |  -   | /usr/local/www/nextcloud/apps     |
-| nextcloud-apps-pkg | 0     | 0     |  -   |  -   | /usr/local/www/nextcloud/apps-pkg |
-| nextcloud-config   | 80    | 80    |  -   |  -   | /usr/local/www/nextcloud/config   |
-| nextcloud-data     | 80    | 80    | 770  |  -   | /usr/local/www/nextcloud/data     |
-| nextcloud-themes   | 0     | 0     |  -   |  -   | /usr/local/www/nextcloud/themes   |
-| nextcloud-done     | -     | -     |  -   |  -   | /.nextcloud-done                  |
-| nextcloud-log      | 80    | 80    |  -   |  -   | /var/log/nextcloud                |
+| Name | Owner | Group | Perm | Type | Mountpoint |
+| --- | --- | --- | --- | --- | --- |
+| appjail-44aff70a60-usr_local_www_html | `${PUID}` | `${PGID}` | - | - | /usr/local/www/html |
 
-**Note**: `nextcloud-apps-pkg` volume was added for special purposes. If you have installed a Nextcloud application using the package manager (not using Nextcloud: `occ` or web GUI), install them each time you create the Nextcloud jail. 
+## OCI Configuration
 
-## Tags
-
-| Tag                 | Arch    | Version        | Type   |
-| ------------------- | ------- | -------------- | ------ |
-| `14.3-php84-apache` | `amd64` | `14.3-RELEASE` | `thin` |
-| `14.3-php84-fpm`    | `amd64` | `14.3-RELEASE` | `thin` |
-| `15-php84-apache` | `amd64` | `15` | `thin` |
-| `15-php84-fpm`    | `amd64` | `15` | `thin` |
+```yaml
+build:
+  variants:
+    - tag: 15.1-apache
+      containerfile: Containerfile.apache
+      aliases: ["latest"]
+      default: true
+      args:
+        FREEBSD_RELEASE: "15.1"
+        APACHEVER: "24"
+        PHPVER: "84"
+        NO_PKGCLEAN: "1"
+      cache_dirs: ["pkgcache0:/var/cache/pkg"]
+    - tag: 15.1-fpm
+      containerfile: Containerfile.fpm
+      args:
+        FREEBSD_RELEASE: "15.1"
+        PHPVER: "84"
+        NO_PKGCLEAN: "1"
+      cache_dirs: ["pkgcache0:/var/cache/pkg"]
+```
 
 ## Notes
 

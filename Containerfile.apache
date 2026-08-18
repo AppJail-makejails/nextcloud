@@ -1,0 +1,141 @@
+ARG FREEBSD_RELEASE
+ARG APACHEVER
+ARG PHPVER
+
+FROM ghcr.io/appjail-makejails/apache:${FREEBSD_RELEASE}-${APACHEVER}-php${PHPVER}
+
+ARG NO_PKGCLEAN
+
+LABEL org.opencontainers.image.title="Nextcloud" \
+    org.opencontainers.image.description="Collaboration platform which runs on your own server" \
+    org.opencontainers.image.source="https://github.com/AppJail-makejails/nextcloud" \
+    org.opencontainers.image.url="https://github.com/AppJail-makejails/nextcloud" \
+    org.opencontainers.image.vendor="DtxdF" \
+    org.opencontainers.image.authors="Jesús Daniel Colmenares Oviedo <dtxdf@disroot.org>"
+
+ARG PHPVER
+
+RUN set -xe; \
+    \
+    umask 0022; \
+    \
+    pkg update; \
+    pkg install \
+        nextcloud-php${PHPVER} \
+        FreeBSD-cron \
+        rsync \
+# Include only the packages that are not installed by default.
+        php${PHPVER}-pdo_sqlite \
+# TODO: Enable igbinary in this port.
+        php${PHPVER}-pecl-memcached \
+# TODO: Add option in port for igbinary.
+        php${PHPVER}-pecl-redis \
+        php${PHPVER}-pecl-imagick \
+# TODO: Not available yet: https://www.freshports.org/converters/pecl-igbinary-session
+        php${PHPVER}-pecl-igbinary-session; \
+    \
+    if [ -z "${NO_PKGCLEAN}" ]; then \
+        pkg clean -a; \
+        rm -rf /var/cache/pkg/*; \
+    fi; \
+    rm -rf /var/db/pkg/repos/*
+
+COPY crontab /etc/crontab
+RUN chmod 644 /etc/crontab
+
+ENV PHP_MEMORY_LIMIT 512M
+ENV PHP_UPLOAD_LIMIT 512M
+ENV PHP_OPCACHE_MEMORY_CONSUMPTION 128
+
+# set recommended PHP.ini settings
+# see https://docs.nextcloud.com/server/latest/admin_manual/installation/server_tuning.html#enable-php-opcache
+RUN set -xe; \
+    \
+    umask 0022; \
+    \
+    { \
+        echo "opcache.enable=1"; \
+        echo "opcache.interned_strings_buffer=32"; \
+        echo "opcache.max_accelerated_files=10000"; \
+        echo "opcache.memory_consumption=${PHP_OPCACHE_MEMORY_CONSUMPTION}"; \
+        echo "opcache.save_comments=1"; \
+        echo "opcache.revalidate_freq=60"; \
+        echo "opcache.jit=1255"; \
+        echo "opcache.jit_buffer_size=8M"; \
+    } > "/usr/local/etc/php/opcache-recommended.ini"; \
+    \
+    echo "apc.enable_cli=1" >> "/usr/local/etc/php/zz-appjail-php-ext-apcu.ini"; \
+    \
+    { \
+        echo "apc.serializer=igbinary"; \
+        echo "session.serialize_handler=igbinary"; \
+    } >> "/usr/local/etc/php/zz-appjail-php-ext-igbinary.ini"; \
+    \
+    { \
+        echo "memory_limit=${PHP_MEMORY_LIMIT}"; \
+        echo "upload_max_filesize=${PHP_UPLOAD_LIMIT}"; \
+        echo "post_max_size=${PHP_UPLOAD_LIMIT}"; \
+    } > "/usr/local/etc/php/nextcloud.ini"; \
+    \
+    mv /usr/local/www/nextcloud /nextcloud.src; \
+    \
+    rm /nextcloud.src/config/config.php; \
+    rm /nextcloud.src/config/config.documented.php; \
+    \
+    rmdir /nextcloud.src/apps; \
+    mv /nextcloud.src/apps-pkg /nextcloud.src/apps; \
+    \
+    mkdir -p /nextcloud.src/custom_apps; \
+    chown www:www /nextcloud.src/custom_apps; \
+    chmod 755 /nextcloud.src/custom_apps; \
+    \
+    mkdir -p /usr/local/www/html; \
+    chown www:www /usr/local/www/html; \
+    chmod 755 /usr/local/www/html; \
+    \
+    rm -rf /usr/local/www/apache24/data; \
+    ln -s /usr/local/www/html /usr/local/www/apache24/data; \
+    \
+    mkdir /usr/local/www/data; \
+    mkdir -p /entrypoint-hooks.d/pre-installation \
+             /entrypoint-hooks.d/post-installation \
+             /entrypoint-hooks.d/pre-upgrade \
+             /entrypoint-hooks.d/post-upgrade \
+             /entrypoint-hooks.d/before-starting
+
+VOLUME /usr/local/www/html
+
+WORKDIR /usr/local/www/html
+
+RUN set -xe; \
+    \
+    umask 0022; \
+    \
+    sed -i '' \
+        -e '/LoadModule headers_module/s/^#//' \
+        -e '/LoadModule rewrite_module/s/^#//' \
+        -e '/LoadModule remoteip_module/s/^#//' \
+            /usr/local/etc/apache24/httpd.conf; \
+    \
+    { \
+     echo "RemoteIPHeader X-Real-IP"; \
+     echo "RemoteIPInternalProxy 10.0.0.0/8"; \
+     echo "RemoteIPInternalProxy 172.16.0.0/12"; \
+     echo "RemoteIPInternalProxy 192.168.0.0/16"; \
+    } > /usr/local/etc/apache24/Includes/remoteip.conf
+
+# set apache config LimitRequestBody
+ENV APACHE_BODY_LIMIT 1073741824
+RUN set -xe; \
+    \
+    umask 0022; \
+    \
+    { \
+     echo "LimitRequestBody ${APACHE_BODY_LIMIT}"; \
+    } > /usr/local/etc/apache24/Includes/apache-limits.conf
+
+COPY *.sh upgrade.exclude /
+COPY config/* /nextcloud.src/config/
+
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["httpd-foreground"]
