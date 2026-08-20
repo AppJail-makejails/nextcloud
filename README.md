@@ -143,7 +143,7 @@ The Nextcloud image supports auto configuration via environment variables. You c
 * `POSTGRES_PASSWORD`: Password for the database user using postgres.
 * `POSTGRES_HOST`: Hostname of the database server using postgres.
 
-As an alternative to passing sensitive information via environment variables, `_FILE` may be appended to the previously listed environment variables, causing the initialization script to load the values for those variables from files present in the container. See [Secrets](#secrets) section below.
+As an alternative to passing sensitive information via environment variables, `_FILE` may be appended to the previously listed environment variables, causing the initialization script to load the values for those variables from files present in the container. See [AppJail Secrets](#appjail-secrets) section below.
 
 If you set any group of values (i.e. all of `MYSQL_DATABASE`, `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_HOST`), they will not be asked in the install page on first run. With a complete configuration by using all variables for your database type, you can additionally configure your Nextcloud instance by setting admin user and password (only works if you set both):
 
@@ -642,29 +642,19 @@ http {
 
 Then run `appjail-director up`. Now you can access Nextcloud at http://nextcloud/ from your host system or http://host-ip:8080/ from external hosts.
 
-### Secrets
+### AppJail Secrets
 
-As an alternative to passing sensitive information via environment variables, `_FILE` may be appended to the previously listed environment variables, causing the initialization script to load the values for those variables from files present in the container. For example:
+As an alternative to passing sensitive information via environment variables, `_FILE` may be appended to the previously listed environment variables, causing the initialization script to load the values for those variables from files present in the container.  In particular, this can be used to load passwords from [AppJail secrets](https://appjail.readthedocs.io/en/latest/secrets/) stored in `/secrets/<group_name>/<secret_name>` files. For example:
 
 **Secrets**:
 
 ```console
-$ volumedir=/var/appjail-volumes/nextcloud
-$ mkdir -p "${volumedir}"
-$ secretsdir="${volumesdir}/secrets"
-$ install -d -m 0700 "${secretsdir}"
-$ echo -ne \
-    "postgres_db\n" \
-    "postgres_user\n" \
-    "postgres_password\n" \
-    "nextcloud_admin_password\n" \
-    "nextcloud_admin_user\n" |\
-  xargs -I % install -m 0600 /dev/null "${secretsdir}/%"
-$ $EDITOR "${secretsdir}/postgres_db"
-$ $EDITOR > "${secretsdir}/postgres_user"
-$ $EDITOR > "${secretsdir}/postgres_password"
-$ $EDITOR > "${secretsdir}/nextcloud_admin_password"
-$ $EDITOR > "${secretsdir}/nextcloud_admin_user"
+$ # IMPORTANT: Turn off shell history
+$ appjail secrets create -s postgres/db nextcloud
+$ appjail secrets create -s postgres/user nextcloud
+$ appjail secrets create -s postgres/password nextcloud
+$ appjail secrets create -s nextcloud/admin_password nextcloud
+$ appjail secrets create -s nextcloud/admin_user admin
 ```
 
 **appjail-director.yml**:
@@ -680,36 +670,35 @@ services:
     priority: 98
     makejail: gh+AppJail-makejails/postgres
     options:
-      - volume: secrets perm:0700
       - template: !ENV '${PWD}/template.conf'
+      - secret: postgres
     volumes:
       - db: /var/db/postgres
-      - secrets: secrets
     oci:
       environment:
-        - POSTGRES_DB_FILE: /volumes/secrets/postgres_db
-        - POSTGRES_USER_FILE: /volumes/secrets/postgres_user
-        - POSTGRES_PASSWORD_FILE: /volumes/secrets/postgres_password
+        - POSTGRES_DB_FILE: /secrets/postgres/db
+        - POSTGRES_USER_FILE: /secrets/postgres/user
+        - POSTGRES_PASSWORD_FILE: /secrets/postgres/password
 
   app:
     name: nextcloud
     makejail: gh+AppJail-makejails/nextcloud
     options:
       - expose: 8080:80
-      - volume: secrets perm:0700
       - depend: nextcloud-db
       - template: !ENV '${PWD}/template.conf'
+      - secret: postgres
+      - secret: nextcloud
     volumes:
       - data: /usr/local/www/html
-      - secrets: secrets
     oci:
       environment:
         - POSTGRES_HOST: nextcloud-db
-        - POSTGRES_DB_FILE: /volumes/secrets/postgres_db
-        - POSTGRES_USER_FILE: /volumes/secrets/postgres_user
-        - POSTGRES_PASSWORD_FILE: /volumes/secrets/postgres_password
-        - NEXTCLOUD_ADMIN_PASSWORD_FILE: /volumes/secrets/nextcloud_admin_password
-        - NEXTCLOUD_ADMIN_USER_FILE: /volumes/secrets/nextcloud_admin_user
+        - POSTGRES_DB_FILE: /secrets/postgres/db
+        - POSTGRES_USER_FILE: /secrets/postgres/user
+        - POSTGRES_PASSWORD_FILE: /secrets/postgres/password
+        - NEXTCLOUD_ADMIN_PASSWORD_FILE: /secrets/nextcloud/admin_password
+        - NEXTCLOUD_ADMIN_USER_FILE: /secrets/nextcloud/admin_user
         # required due to NEXTCLOUD_ADMIN_* env vars
         - NEXTCLOUD_TRUSTED_DOMAINS: nextcloud
 
@@ -718,10 +707,6 @@ volumes:
     device: /var/appjail-volumes/nextcloud/db
   data:
     device: /var/appjail-volumes/nextcloud/data
-  secrets:
-    device: /var/appjail-volumes/nextcloud/secrets
-    type: <volumefs>
-    options: ro
 ```
 
 Currently, this is only supported for `NEXTCLOUD_ADMIN_PASSWORD`, `NEXTCLOUD_ADMIN_USER`, `MYSQL_DATABASE`, `MYSQL_PASSWORD`, `MYSQL_USER`, `POSTGRES_DB`, `POSTGRES_PASSWORD`, `POSTGRES_USER`, `REDIS_HOST_PASSWORD`, `SMTP_PASSWORD`, `OBJECTSTORE_S3_KEY`, and `OBJECTSTORE_S3_SECRET`.
