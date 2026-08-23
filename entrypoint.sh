@@ -22,6 +22,11 @@ run_as() {
     fi
 }
 
+run_as_root()
+{
+    RUN_AS="$user" sh -c "$1"
+}
+
 # Execute all executable files in a given directory in alphanumeric order
 run_path() {
     local hook_folder_path="/entrypoint-hooks.d/$1"
@@ -41,13 +46,20 @@ run_path() {
                 continue
             fi
 
+            return_code=0
+
             echo "==> Running the script (cwd: $(pwd)): \"${script_file_path}\""
             found=$((found+1))
-            run_as "${script_file_path}" || {
-                return_code="$?"
+            if [ -n "${RUN_HOOKS_AS_ROOT}" ]; then
+                run_as_root "${script_file_path}" || return_code="$?"
+            else
+                run_as "${script_file_path}" || return_code="$?"
+            fi
+
+            if [ ${return_code} -ne 0 ]; then
                 echo "==> Failed at executing script \"${script_file_path}\". Exit code: ${return_code}"
                 exit 1
-            }
+            fi
 
             echo "==> Finished executing the script: \"${script_file_path}\""
         done

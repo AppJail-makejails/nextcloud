@@ -276,6 +276,8 @@ volumes:
     device: !ENV '${PWD}/app-hooks/before-starting'
 ```
 
+**Note**: Hooks run as a non-root user. If you want to run the hooks as root, set `RUN_HOOKS_AS_ROOT`. The `RUN_AS` environment variable is set to the non-root user in case you want to downgrade privileges in the script.
+
 ### Using the apache image behind a reverse proxy and auto configure server host and protocol
 
 The apache image will replace the remote addr (IP address visible to Nextcloud) with the IP address from `X-Real-IP` if the request is coming from a proxy in `10.0.0.0/8`, `172.16.0.0/12` or `192.168.0.0/16` by default. If you want Nextcloud to pick up the server host (`HTTP_X_FORWARDED_HOST`), protocol (`HTTP_X_FORWARDED_PROTO`) and client IP (`HTTP_X_FORWARDED_FOR`) from a trusted proxy, then disable rewrite IP and add the reverse proxy's IP address to `TRUSTED_PROXIES`.
