@@ -31,8 +31,7 @@ RUN set -xe; \
         php${PHPVER}-pecl-redis \
         php${PHPVER}-pecl-imagick \
 # TODO: Not available yet: https://www.freshports.org/converters/pecl-igbinary-session
-        php${PHPVER}-pecl-igbinary-session \
-        su-exec-static; \
+        php${PHPVER}-pecl-igbinary-session; \
     \
     if [ -z "${NO_PKGCLEAN}" ]; then \
         pkg clean -a; \
