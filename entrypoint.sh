@@ -185,7 +185,7 @@ if [ "$1" = "httpd-foreground" ] || [ "$1" = "php-fpm" ] || [ "${NEXTCLOUD_UPDAT
         if ! lockf -s -t 0 9; then
             # If we couldn't get it immediately, show a message, then wait for real
             echo "Another process is initializing Nextcloud. Waiting..."
-            lock -s 9
+            lockf -s 9
         fi
 
         installed_version="0.0.0.0"
