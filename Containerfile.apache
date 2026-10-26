@@ -29,7 +29,7 @@ RUN set -xe; \
 # TODO: Enable igbinary in this port.
         php${PHPVER}-pecl-memcached \
 # TODO: Add option in port for igbinary.
-        php${PHPVER}-pecl-redis \
+        php${PHPVER}-redis \
         php${PHPVER}-pecl-imagick \
 # TODO: Not available yet: https://www.freshports.org/converters/pecl-igbinary-session
         php${PHPVER}-pecl-igbinary-session; \
